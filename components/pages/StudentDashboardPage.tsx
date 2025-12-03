@@ -13,24 +13,191 @@ declare global {
   }
 }
 
-// --- NEW WIDGETS ---
+// --- CONSTANTS ---
+const VN_CITIES = [
+    { name: 'Hà Nội', lat: 21.0285, lng: 105.8542 },
+    { name: 'TP. Hồ Chí Minh', lat: 10.8231, lng: 106.6297 },
+    { name: 'Đà Nẵng', lat: 16.0544, lng: 108.2022 },
+    { name: 'Hải Phòng', lat: 20.8449, lng: 106.6881 },
+    { name: 'Cần Thơ', lat: 10.0452, lng: 105.7469 },
+    { name: 'Nha Trang', lat: 12.2388, lng: 109.1967 },
+    { name: 'Huế', lat: 16.4637, lng: 107.5909 },
+    { name: 'Đà Lạt', lat: 11.9404, lng: 108.4583 },
+];
 
-const SpaceWeatherWidget = () => {
-    const weathers = [
-        { icon: '🌪️', text: 'Bão Mặt Trời', sub: 'Tín hiệu AI có thể nhiễu' },
-        { icon: '✨', text: 'Mưa Sao Băng', sub: '+10% XP cho bài tập' },
-        { icon: '🌑', text: 'Trăng Khuyết', sub: 'Thời điểm tốt để ôn tập' },
-        { icon: '☀️', text: 'Nắng Cực Quang', sub: 'Năng lượng tràn đầy' }
-    ];
-    const weather = useMemo(() => weathers[Math.floor(Math.random() * weathers.length)], []);
+const WEATHER_CODES: Record<number, { icon: string, text: string, sub: string }> = {
+    0: { icon: '☀️', text: 'Nắng Cực Quang', sub: 'Trời quang đãng' },
+    1: { icon: '🌤️', text: 'Mây Tinh Vân', sub: 'Nhiều mây' },
+    2: { icon: '☁️', text: 'Mây Tinh Vân', sub: 'Nhiều mây' },
+    3: { icon: '☁️', text: 'Mây Tinh Vân', sub: 'Nhiều mây' },
+    45: { icon: '🌫️', text: 'Sương Mù', sub: 'Tầm nhìn hạn chế' },
+    48: { icon: '🌫️', text: 'Sương Mù', sub: 'Tầm nhìn hạn chế' },
+    51: { icon: '🌧️', text: 'Mưa Sao Băng', sub: 'Mưa phùn' },
+    53: { icon: '🌧️', text: 'Mưa Sao Băng', sub: 'Mưa phùn' },
+    55: { icon: '🌧️', text: 'Mưa Sao Băng', sub: 'Mưa phùn' },
+    61: { icon: '⛈️', text: 'Mưa Thiên Thạch', sub: 'Mưa rào' },
+    63: { icon: '⛈️', text: 'Mưa Thiên Thạch', sub: 'Mưa rào' },
+    65: { icon: '⛈️', text: 'Mưa Thiên Thạch', sub: 'Mưa rào' },
+    80: { icon: '⛈️', text: 'Bão Từ', sub: 'Mưa lớn' },
+    81: { icon: '⛈️', text: 'Bão Từ', sub: 'Mưa lớn' },
+    82: { icon: '⛈️', text: 'Bão Từ', sub: 'Mưa lớn' },
+    95: { icon: '⚡', text: 'Sấm Sét Plasma', sub: 'Dông bão' },
+    96: { icon: '⚡', text: 'Sấm Sét Plasma', sub: 'Dông bão' },
+    99: { icon: '⚡', text: 'Sấm Sét Plasma', sub: 'Dông bão' },
+};
+
+// --- ANALOG CLOCK COMPONENT ---
+const AnalogClock = () => {
+    const [time, setTime] = useState(new Date());
+
+    useEffect(() => {
+        const timer = setInterval(() => setTime(new Date()), 1000);
+        return () => clearInterval(timer);
+    }, []);
+
+    const seconds = time.getSeconds();
+    const minutes = time.getMinutes();
+    const hours = time.getHours();
 
     return (
-        <div className="flex items-center gap-3 p-3 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-md animate-fade-in-up">
-            <span className="text-3xl filter drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">{weather.icon}</span>
-            <div>
-                <p className="text-xs text-blue-200 font-bold uppercase tracking-wider">Thời tiết Vũ trụ</p>
-                <p className="text-sm font-semibold text-white">{weather.text}</p>
-                <p className="text-[10px] text-gray-400">{weather.sub}</p>
+        <div className="relative w-28 h-28 rounded-full border-4 border-gray-700 bg-black/60 shadow-[inset_0_0_20px_rgba(0,0,0,0.8)] flex items-center justify-center backdrop-blur-sm">
+            {/* Clock Face Markers */}
+            {[...Array(12)].map((_, i) => (
+                <div 
+                    key={i}
+                    className={`absolute w-1 ${i % 3 === 0 ? 'h-3 bg-white' : 'h-1.5 bg-gray-500'}`}
+                    style={{ 
+                        transform: `rotate(${i * 30}deg) translateY(-42px)`,
+                        transformOrigin: '50% 50% 0px' // Not strictly needed with this layout trick but keeps logic clear
+                    }}
+                ></div>
+            ))}
+
+            {/* Hour Hand */}
+            <div 
+                className="absolute w-1.5 bg-white rounded-full origin-bottom shadow-lg"
+                style={{ 
+                    height: '25%', 
+                    bottom: '50%',
+                    left: 'calc(50% - 3px)',
+                    transform: `rotate(${(hours % 12) * 30 + minutes * 0.5}deg)` 
+                }}
+            ></div>
+
+            {/* Minute Hand */}
+            <div 
+                className="absolute w-1 bg-blue-400 rounded-full origin-bottom shadow-lg"
+                style={{ 
+                    height: '38%', 
+                    bottom: '50%',
+                    left: 'calc(50% - 2px)',
+                    transform: `rotate(${minutes * 6}deg)` 
+                }}
+            ></div>
+
+            {/* Second Hand */}
+            <div 
+                className="absolute w-0.5 bg-red-500 rounded-full origin-bottom"
+                style={{ 
+                    height: '42%', 
+                    bottom: '50%',
+                    left: 'calc(50% - 1px)',
+                    transform: `rotate(${seconds * 6}deg)` 
+                }}
+            ></div>
+
+            {/* Center Cap */}
+            <div className="absolute w-3 h-3 bg-gray-200 rounded-full border-2 border-red-500 z-10 shadow-md"></div>
+        </div>
+    );
+};
+
+// --- NEW WIDGETS ---
+
+const RealTimeWeatherWidget = () => {
+    const [city, setCity] = useState(VN_CITIES[1]); // Default HCM
+    const [weatherData, setWeatherData] = useState<{ temp: number, code: number } | null>(null);
+    const [currentTime, setCurrentTime] = useState(new Date());
+
+    // Clock Tick
+    useEffect(() => {
+        const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+        return () => clearInterval(timer);
+    }, []);
+
+    // Fetch Weather
+    useEffect(() => {
+        const fetchWeather = async () => {
+            try {
+                const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lng}&current_weather=true`);
+                const data = await res.json();
+                if (data.current_weather) {
+                    setWeatherData({
+                        temp: data.current_weather.temperature,
+                        code: data.current_weather.weathercode
+                    });
+                }
+            } catch (e) {
+                console.error("Weather fetch failed", e);
+            }
+        };
+        fetchWeather();
+        // Refresh every 30 mins
+        const refresh = setInterval(fetchWeather, 30 * 60 * 1000);
+        return () => clearInterval(refresh);
+    }, [city]);
+
+    const weatherInfo = weatherData ? (WEATHER_CODES[weatherData.code] || WEATHER_CODES[0]) : WEATHER_CODES[0];
+
+    return (
+        <div className="flex flex-col p-3 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-md animate-fade-in-up h-[340px] relative overflow-hidden group">
+            {/* Background Glow */}
+            <div className="absolute -right-10 -top-10 w-40 h-40 bg-blue-500/10 rounded-full blur-2xl group-hover:bg-blue-500/20 transition-all"></div>
+
+            {/* Header: City Selector */}
+            <div className="z-10 flex justify-between items-center mb-2">
+                <select 
+                    className="bg-black/30 text-[10px] text-blue-200 border border-blue-500/30 rounded px-2 py-1 outline-none cursor-pointer hover:bg-black/50 transition-colors w-full max-w-[120px]"
+                    value={city.name}
+                    onChange={(e) => {
+                        const newCity = VN_CITIES.find(c => c.name === e.target.value);
+                        if (newCity) setCity(newCity);
+                    }}
+                >
+                    {VN_CITIES.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                </select>
+                <div className="text-[10px] font-mono text-gray-400">
+                    UTC+7
+                </div>
+            </div>
+
+            {/* Center: Analog Clock */}
+            <div className="flex-1 flex items-center justify-center z-10 py-2">
+                <AnalogClock />
+            </div>
+
+            {/* Bottom: Weather & Digital Time */}
+            <div className="z-10 mt-auto bg-black/20 rounded-xl p-2 border border-white/5">
+                <div className="flex justify-between items-end">
+                    <div className="flex flex-col">
+                        <span className="text-3xl filter drop-shadow-[0_0_5px_rgba(255,255,255,0.5)] mb-1">
+                            {weatherInfo.icon}
+                        </span>
+                        <p className="text-xl font-bold text-white leading-none">
+                            {weatherData ? Math.round(weatherData.temp) : '--'}°C
+                        </p>
+                        <p className="text-[10px] text-blue-200 truncate max-w-[80px] mt-1">{weatherInfo.text}</p>
+                    </div>
+                    
+                    <div className="text-right">
+                        <p className="text-2xl font-mono font-bold text-white tracking-wider leading-none">
+                            {currentTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        <p className="text-[10px] text-gray-400 font-mono mt-1">
+                            {currentTime.toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' })}
+                        </p>
+                    </div>
+                </div>
             </div>
         </div>
     );
@@ -362,6 +529,170 @@ const StreakWidget = () => {
     );
 };
 
+// --- ACCOUNT WIDGET & MODAL ---
+const AccountSettingsModal: React.FC<{ isOpen: boolean, onClose: () => void, initialTab?: 'profile' | 'security' }> = ({ isOpen, onClose, initialTab = 'profile' }) => {
+    const { user } = useContext(AuthContext)!;
+    const { updateUserProfile } = useContext(DataContext)!;
+    
+    const [activeTab, setActiveTab] = useState<'profile' | 'security'>(initialTab);
+    const [name, setName] = useState('');
+    const [nickname, setNickname] = useState('');
+    const [oldPassword, setOldPassword] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (isOpen) {
+            setActiveTab(initialTab);
+            if (user) {
+                setName(user.name);
+                setNickname(user.nickname || '');
+                setOldPassword('');
+                setNewPassword('');
+                setError(null);
+            }
+        }
+    }, [isOpen, user, initialTab]);
+
+    const handleSave = () => {
+        if (!user) return;
+        try {
+            updateUserProfile(user.id, {
+                name,
+                nickname,
+                password: newPassword || undefined,
+                oldPassword: oldPassword || undefined
+            });
+            alert("Cập nhật thông tin thành công!");
+            onClose();
+        } catch (e: any) {
+            setError(e.message);
+        }
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Quản lý Tài khoản">
+            <div className="space-y-4">
+                {/* TABS */}
+                <div className="flex border-b border-gray-700 mb-4">
+                    <button 
+                        onClick={() => setActiveTab('profile')} 
+                        className={`px-4 py-2 font-bold text-sm border-b-2 transition-colors ${activeTab === 'profile' ? 'border-blue-500 text-white' : 'border-transparent text-gray-400 hover:text-gray-300'}`}
+                    >
+                        Hồ sơ
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('security')} 
+                        className={`px-4 py-2 font-bold text-sm border-b-2 transition-colors ${activeTab === 'security' ? 'border-blue-500 text-white' : 'border-transparent text-gray-400 hover:text-gray-300'}`}
+                    >
+                        Bảo mật (Đổi mật khẩu)
+                    </button>
+                </div>
+
+                {activeTab === 'profile' && (
+                    <div className="space-y-4 animate-fade-in">
+                        <div>
+                            <label className="block text-sm text-gray-400 mb-1">User ID</label>
+                            <input type="text" className="form-input w-full bg-gray-800 text-gray-500 cursor-not-allowed" value={user?.id} disabled />
+                        </div>
+                        <div>
+                            <label className="block text-sm text-gray-400 mb-1">Họ và Tên</label>
+                            <input type="text" className="form-input w-full" value={name} onChange={e => setName(e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="block text-sm text-gray-400 mb-1">Biệt danh (Nickname)</label>
+                            <input type="text" className="form-input w-full" value={nickname} onChange={e => setNickname(e.target.value)} placeholder="VD: Thuyền trưởng..." />
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'security' && (
+                    <div className="space-y-4 animate-fade-in">
+                        <div className="bg-red-900/20 p-4 rounded-lg border border-red-500/20">
+                            <h3 className="text-sm font-bold text-red-300 mb-2">🔒 Thay đổi Mật khẩu</h3>
+                            <div className="space-y-3">
+                                <input type="password" className="form-input w-full" placeholder="Mật khẩu cũ" value={oldPassword} onChange={e => setOldPassword(e.target.value)} />
+                                <input type="password" className="form-input w-full" placeholder="Mật khẩu mới" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
+
+                <div className="flex justify-end gap-2 pt-4">
+                    <button onClick={onClose} className="btn btn-secondary">Hủy</button>
+                    <button onClick={handleSave} className="btn btn-primary">Lưu Thay Đổi</button>
+                </div>
+            </div>
+        </Modal>
+    );
+};
+
+const AccountManagerWidget = () => {
+    const { user } = useContext(AuthContext)!;
+    const { db } = useContext(DataContext)!;
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [modalTab, setModalTab] = useState<'profile' | 'security'>('profile');
+    
+    const level = Math.floor(db.GAMIFICATION.points / 1000) + 1;
+    const progress = (db.GAMIFICATION.points % 1000) / 1000 * 100;
+
+    const openModal = (tab: 'profile' | 'security') => {
+        setModalTab(tab);
+        setIsModalOpen(true);
+    };
+
+    return (
+        <>
+            <div className="card p-3 flex items-center justify-between bg-blue-900/10 border-blue-500/30 transition-all group h-full">
+                <div 
+                    onClick={() => openModal('profile')}
+                    className="flex items-center gap-3 cursor-pointer"
+                >
+                     <div className="relative">
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 p-[2px] group-hover:scale-105 transition-transform">
+                            <div className="w-full h-full rounded-full bg-black flex items-center justify-center font-bold text-white text-lg">
+                                {user?.name.charAt(0)}
+                            </div>
+                        </div>
+                        <div className="absolute -bottom-1 -right-1 bg-black text-[10px] border border-gray-600 px-1 rounded text-yellow-400 font-bold shadow-sm">
+                            LV.{level}
+                        </div>
+                     </div>
+                     <div>
+                         <p className="text-sm font-bold text-white group-hover:text-blue-300 transition-colors">
+                            {user?.nickname || user?.name}
+                         </p>
+                         <div className="w-24 h-1.5 bg-gray-800 rounded-full mt-1 relative overflow-hidden border border-white/5">
+                             <div className="h-full bg-blue-500 rounded-full transition-all duration-1000" style={{width: `${progress}%`}}></div>
+                         </div>
+                         <p className="text-[9px] text-gray-400 mt-0.5">{db.GAMIFICATION.points} XP</p>
+                     </div>
+                </div>
+                
+                <div className="flex flex-col gap-2">
+                    <button 
+                        onClick={() => openModal('profile')} 
+                        className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                        title="Hồ sơ"
+                    >
+                        ⚙️
+                    </button>
+                    <button 
+                        onClick={() => openModal('security')} 
+                        className="p-1.5 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-colors"
+                        title="Đổi Mật khẩu"
+                    >
+                        🔒
+                    </button>
+                </div>
+            </div>
+            <AccountSettingsModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} initialTab={modalTab} />
+        </>
+    );
+};
+
 const ShopModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
     const { db, buyShopItem, equipShopItem } = useContext(DataContext)!;
     const { points, diamonds, inventory, equippedSkin } = db.GAMIFICATION;
@@ -473,22 +804,10 @@ const StudentDashboardPage: React.FC = () => {
         <div className="space-y-8 md:space-y-12 pb-20">
             {/* TOP BAR WIDGETS */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in-up">
-                <SpaceWeatherWidget />
+                <RealTimeWeatherWidget />
                 <div className="hidden lg:block"><MusicWidget /></div>
                 <div className="hidden lg:block"><FocusTimerWidget /></div>
-                
-                {/* Profile / XP Summary Mini */}
-                <div className="card p-3 flex items-center justify-between bg-blue-900/10 border-blue-500/30">
-                    <div className="flex items-center gap-3">
-                         <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 p-[2px]">
-                            <div className="w-full h-full rounded-full bg-black flex items-center justify-center font-bold">{user.name.charAt(0)}</div>
-                         </div>
-                         <div>
-                             <p className="text-xs text-gray-400 uppercase font-bold">Level {Math.floor(gamification.points / 1000) + 1}</p>
-                             <div className="w-24 h-1.5 bg-gray-800 rounded-full mt-1"><div className="h-full bg-blue-500 rounded-full" style={{width: '60%'}}></div></div>
-                         </div>
-                    </div>
-                </div>
+                <AccountManagerWidget />
             </div>
 
             {/* HERO ISLAND */}
@@ -504,7 +823,7 @@ const StudentDashboardPage: React.FC = () => {
                          <h1 className="text-4xl md:text-6xl font-black text-white leading-tight drop-shadow-lg">
                             {greeting}, <br />
                             <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-300 to-pink-300 filter drop-shadow-sm">
-                                {user.name}
+                                {user.nickname || user.name}
                             </span>
                          </h1>
                          <p className="text-blue-100 text-base md:text-xl font-light">

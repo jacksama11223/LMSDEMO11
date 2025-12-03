@@ -361,6 +361,27 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         });
     }, []);
 
+    const updateUserProfile = useCallback((userId: string, data: { name?: string, nickname?: string, password?: string, oldPassword?: string }) => {
+        setDb(prevDb => {
+            const newDb = JSON.parse(JSON.stringify(prevDb)) as Database;
+            const user = newDb.USERS[userId];
+            if (!user) throw new Error("User not found");
+
+            // Verify old password if changing password
+            if (data.password) {
+                if (data.oldPassword !== user.password) {
+                    throw new Error("Mật khẩu cũ không đúng.");
+                }
+                user.password = data.password;
+            }
+
+            if (data.name) user.name = data.name;
+            if (data.nickname) user.nickname = data.nickname;
+
+            return newDb;
+        });
+    }, []);
+
     const editLessonContent = useCallback((lessonId: string, newContent: string) => {
         setDb(prevDb => {
             const newDb = JSON.parse(JSON.stringify(prevDb)) as Database;
@@ -859,7 +880,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     // ---------------------------------------
 
     const value = useMemo(() => ({
-        db, registerUser, toggleUserLock, unlockAllUsers, setApiKey, editLessonContent,
+        db, registerUser, toggleUserLock, unlockAllUsers, setApiKey, updateUserProfile, editLessonContent,
         createFileAssignment, createQuizAssignment, submitFileAssignment, submitQuiz,
         gradeFileSubmission, sendChatMessage, joinGroup, createGroup, sendGroupMessage,
         addDiscussionPost, sendAnnouncement, dismissAnnouncement, runMockTest,
@@ -868,7 +889,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         createPersonalNote, updatePersonalNote, deletePersonalNote, savePdfToNote, getPdfForNote, removePdfFromNote,
         buyShopItem, equipShopItem, checkDailyDiamondReward, updateScratchpad, toggleCourseBookmark, completeOnboarding
     }), [
-        db, registerUser, toggleUserLock, unlockAllUsers, setApiKey, editLessonContent,
+        db, registerUser, toggleUserLock, unlockAllUsers, setApiKey, updateUserProfile, editLessonContent,
         createFileAssignment, createQuizAssignment, submitFileAssignment, submitQuiz,
         gradeFileSubmission, sendChatMessage, joinGroup, createGroup, sendGroupMessage,
         addDiscussionPost, sendAnnouncement, dismissAnnouncement, runMockTest,
@@ -884,7 +905,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
 // --- Auth Provider ---
 interface AuthProviderProps { children: ReactNode; }
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-    const [user, setUser] = useState<{ id: string; name: string; role: UserRole; hasSeenOnboarding?: boolean } | null>(null);
+    const [user, setUser] = useState<{ id: string; name: string; role: UserRole; hasSeenOnboarding?: boolean; nickname?: string } | null>(null);
     const [error, setError] = useState<string | null>(null);
     const { db } = useContext(DataContext)!;
 
@@ -895,7 +916,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 setError("Tài khoản đã bị khóa.");
                 setUser(null);
             } else {
-                setUser({ id: foundUser.id, name: foundUser.name, role: foundUser.role, hasSeenOnboarding: foundUser.hasSeenOnboarding });
+                setUser({ 
+                    id: foundUser.id, 
+                    name: foundUser.name, 
+                    role: foundUser.role, 
+                    hasSeenOnboarding: foundUser.hasSeenOnboarding,
+                    nickname: foundUser.nickname 
+                });
                 setError(null);
             }
         } else {
@@ -908,6 +935,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setUser(null);
         setError(null);
     }, []);
+
+    // Update user state if DB changes (e.g., profile update)
+    useEffect(() => {
+        if (user && db.USERS[user.id]) {
+            const currentUser = db.USERS[user.id];
+            // Only update if name/nickname actually changed to avoid loop
+            if (currentUser.name !== user.name || currentUser.nickname !== user.nickname) {
+                setUser(prev => prev ? ({ ...prev, name: currentUser.name, nickname: currentUser.nickname }) : null);
+            }
+        }
+    }, [db.USERS, user?.id]);
 
     const isLocked = useMemo(() => (user ? db.USERS[user.id]?.isLocked : false), [user, db.USERS]);
     const value = useMemo(() => ({ user, error, login, logout, isLocked }), [user, error, login, logout, isLocked]);

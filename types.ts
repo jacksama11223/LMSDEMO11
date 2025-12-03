@@ -5,6 +5,7 @@ export interface User {
   id: string;
   password?: string;
   name: string;
+  nickname?: string; // NEW
   role: UserRole;
   isLocked: boolean;
   apiKey: string | null;
@@ -377,7 +378,7 @@ export interface Database {
 
 // Context Types
 export interface AuthContextType {
-  user: { id: string; name: string; role: UserRole; hasSeenOnboarding?: boolean } | null;
+  user: { id: string; name: string; role: UserRole; hasSeenOnboarding?: boolean; nickname?: string } | null;
   error: string | null;
   login: (id: string, password?: string) => void;
   logout: () => void;
@@ -390,6 +391,7 @@ export interface DataContextType {
   toggleUserLock: (userId: string) => void;
   unlockAllUsers: () => void; // NEW
   setApiKey: (userId: string, apiKey: string) => void;
+  updateUserProfile: (userId: string, data: { name?: string, nickname?: string, password?: string, oldPassword?: string }) => void; // NEW
   editLessonContent: (lessonId: string, newContent: string) => void;
   createFileAssignment: (title: string, courseId: string) => void;
   createQuizAssignment: (title: string, courseId: string, questions: QuizQuestion[]) => void;
