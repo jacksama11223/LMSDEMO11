@@ -172,6 +172,10 @@ export interface PersonalNote {
     // Linking context
     linkedAssignmentId?: string;
     linkedPathId?: string;
+    
+    // PDF Integration
+    pdfFileId?: string; // Reference to IndexedDB stored PDF
+    
     createdAt: string;
     updatedAt: string;
     isPinned?: boolean;
@@ -415,6 +419,9 @@ export interface DataContextType {
   createPersonalNote: (userId: string, title: string, content: string, links?: { assignmentId?: string, pathId?: string }) => void;
   updatePersonalNote: (noteId: string, data: Partial<PersonalNote>) => void;
   deletePersonalNote: (noteId: string) => void;
+  savePdfToNote: (noteId: string, file: File) => Promise<void>; // NEW
+  getPdfForNote: (pdfId: string) => Promise<File | null>; // NEW
+  removePdfFromNote: (noteId: string) => void; // NEW
 
   // Shop & Gamification
   buyShopItem: (itemId: string) => void;

@@ -46,12 +46,14 @@ export const callGeminiApi = async (
     // LOGIC: Model Selection
     // 1. If Video is attached -> MUST use gemini-3-pro-preview (better multimodal) or gemini-2.5-flash (if short).
     // 2. If Thinking is requested -> MUST use gemini-3-pro-preview or gemini-2.5-flash with thinking config.
-    // Based on user request: "You MUST use the gemini-3-pro-preview model and set thinkingBudget to 32768" for complex queries.
+    // 3. If PDF (or other files) attached -> Prefer gemini-2.5-flash for speed or gemini-3-pro if thinking is on.
     
     let modelName = 'gemini-2.5-flash'; // Default for fast chat
     let thinkingBudget = 0;
 
     const isVideo = options?.fileData?.mimeType.startsWith('video/');
+    // PDF might benefit from larger context window of Flash or reasoning of Pro
+    const isPdf = options?.fileData?.mimeType === 'application/pdf';
 
     if (options?.useThinking) {
         modelName = 'gemini-3-pro-preview';
@@ -74,7 +76,7 @@ export const callGeminiApi = async (
 
         let contents: any;
         
-        // Handle Multimodal (Image/Video)
+        // Handle Multimodal (Image/Video/PDF)
         if (options?.fileData) {
             contents = {
                 parts: [

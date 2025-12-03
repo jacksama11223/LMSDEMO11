@@ -16,16 +16,21 @@ export const GlobalStateContext = createContext<GlobalStateContextType | null>(n
 export const PageContext = createContext<PageContextType | null>(null);
 export const MusicContext = createContext<MusicContextType | null>(null);
 
-// --- INDEXED DB HELPER FOR AUDIO ---
+// --- INDEXED DB HELPER FOR AUDIO & PDF ---
 const DB_NAME = "LMS_MusicDB_V2";
-const STORE_NAME = "tracks";
+const AUDIO_STORE_NAME = "tracks";
+const PDF_STORE_NAME = "pdfs";
 
-const openMusicDB = (): Promise<IDBDatabase> => {
+const openDB = (): Promise<IDBDatabase> => {
     return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, 1);
-        request.onupgradeneeded = () => {
-            if (!request.result.objectStoreNames.contains(STORE_NAME)) {
-                request.result.createObjectStore(STORE_NAME, { keyPath: "id" });
+        const request = indexedDB.open(DB_NAME, 2); // Increment version for schema change
+        request.onupgradeneeded = (event) => {
+            const db = request.result;
+            if (!db.objectStoreNames.contains(AUDIO_STORE_NAME)) {
+                db.createObjectStore(AUDIO_STORE_NAME, { keyPath: "id" });
+            }
+            if (!db.objectStoreNames.contains(PDF_STORE_NAME)) {
+                db.createObjectStore(PDF_STORE_NAME, { keyPath: "id" });
             }
         };
         request.onsuccess = () => resolve(request.result);
@@ -33,12 +38,12 @@ const openMusicDB = (): Promise<IDBDatabase> => {
     });
 };
 
+// ... (Music helpers similar to before, updated to use openDB)
 const saveTracksToDB = async (files: File[]) => {
-    const db = await openMusicDB();
+    const db = await openDB();
     return new Promise<void>((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, "readwrite");
-        const store = tx.objectStore(STORE_NAME);
-        
+        const tx = db.transaction(AUDIO_STORE_NAME, "readwrite");
+        const store = tx.objectStore(AUDIO_STORE_NAME);
         files.forEach(file => {
             const track: Track = {
                 id: `track_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -48,17 +53,16 @@ const saveTracksToDB = async (files: File[]) => {
             };
             store.add(track);
         });
-
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
     });
 };
 
 const getAllTracksFromDB = async (): Promise<Track[]> => {
-    const db = await openMusicDB();
+    const db = await openDB();
     return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, "readonly");
-        const store = tx.objectStore(STORE_NAME);
+        const tx = db.transaction(AUDIO_STORE_NAME, "readonly");
+        const store = tx.objectStore(AUDIO_STORE_NAME);
         const request = store.getAll();
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
@@ -66,12 +70,36 @@ const getAllTracksFromDB = async (): Promise<Track[]> => {
 };
 
 const deleteTrackFromDB = async (id: string) => {
-    const db = await openMusicDB();
+    const db = await openDB();
     return new Promise<void>((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, "readwrite");
-        const store = tx.objectStore(STORE_NAME);
+        const tx = db.transaction(AUDIO_STORE_NAME, "readwrite");
+        const store = tx.objectStore(AUDIO_STORE_NAME);
         const request = store.delete(id);
         request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+    });
+};
+
+// --- PDF Helpers ---
+const savePdfToDB = async (file: File): Promise<string> => {
+    const db = await openDB();
+    const id = `pdf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(PDF_STORE_NAME, "readwrite");
+        const store = tx.objectStore(PDF_STORE_NAME);
+        const request = store.add({ id, file, date: Date.now() });
+        request.onsuccess = () => resolve(id);
+        request.onerror = () => reject(request.error);
+    });
+};
+
+const getPdfFromDB = async (id: string): Promise<File | null> => {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(PDF_STORE_NAME, "readonly");
+        const store = tx.objectStore(PDF_STORE_NAME);
+        const request = store.get(id);
+        request.onsuccess = () => resolve(request.result ? request.result.file : null);
         request.onerror = () => reject(request.error);
     });
 };
@@ -734,6 +762,20 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         });
     }, []);
 
+    const savePdfToNote = useCallback(async (noteId: string, file: File) => {
+        const pdfId = await savePdfToDB(file);
+        updatePersonalNote(noteId, { pdfFileId: pdfId });
+    }, [updatePersonalNote]);
+
+    const getPdfForNote = useCallback(async (pdfId: string) => {
+        return await getPdfFromDB(pdfId);
+    }, []);
+
+    const removePdfFromNote = useCallback((noteId: string) => {
+        updatePersonalNote(noteId, { pdfFileId: undefined });
+        // NOTE: We could also delete from IndexedDB, but for simplicity/caching we leave it.
+    }, [updatePersonalNote]);
+
     // --- SHOP & GAMIFICATION ---
     const buyShopItem = useCallback((itemId: string) => {
         setDb(prevDb => {
@@ -823,7 +865,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         addDiscussionPost, sendAnnouncement, dismissAnnouncement, runMockTest,
         addVideoNote, deleteVideoNote, markLessonComplete, createLearningPath,
         updateNodeProgress, unlockNextNode, extendLearningPath, saveNodeNote,
-        createPersonalNote, updatePersonalNote, deletePersonalNote,
+        createPersonalNote, updatePersonalNote, deletePersonalNote, savePdfToNote, getPdfForNote, removePdfFromNote,
         buyShopItem, equipShopItem, checkDailyDiamondReward, updateScratchpad, toggleCourseBookmark, completeOnboarding
     }), [
         db, registerUser, toggleUserLock, unlockAllUsers, setApiKey, editLessonContent,
@@ -832,7 +874,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         addDiscussionPost, sendAnnouncement, dismissAnnouncement, runMockTest,
         addVideoNote, deleteVideoNote, markLessonComplete, createLearningPath,
         updateNodeProgress, unlockNextNode, extendLearningPath, saveNodeNote,
-        createPersonalNote, updatePersonalNote, deletePersonalNote,
+        createPersonalNote, updatePersonalNote, deletePersonalNote, savePdfToNote, getPdfForNote, removePdfFromNote,
         buyShopItem, equipShopItem, checkDailyDiamondReward, updateScratchpad, toggleCourseBookmark, completeOnboarding
     ]);
 
