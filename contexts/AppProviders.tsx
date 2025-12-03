@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect, useContext, createContext, useRef, useCallback, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { MOCK_DATA } from '../data/mockData';
 import type {
-    User, UserRole, Database, QuizQuestion, MockTestResults, LearningNode,
+    User, UserRole, Database, QuizQuestion, MockTestResults, LearningNode, PersonalNote,
     AuthContextType, DataContextType, GlobalStateContextType, PageContextType,
     FeatureFlagStatus, ServiceName, ServiceStatusValue, ServiceStatus, FeatureFlags, StudyGroup,
     MusicContextType, Track
@@ -238,7 +239,12 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         try {
             const savedData = localStorage.getItem('LMS_DB_V1');
             if (savedData) {
-                return JSON.parse(savedData);
+                const parsed = JSON.parse(savedData);
+                // Ensure NODE_NOTES exists for backward compatibility
+                if (!parsed.NODE_NOTES) parsed.NODE_NOTES = {};
+                // Ensure PERSONAL_NOTES exists
+                if (!parsed.PERSONAL_NOTES) parsed.PERSONAL_NOTES = {};
+                return parsed;
             }
         } catch (e) {
             console.error("Failed to load data from storage, using mock.", e);
@@ -246,7 +252,9 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         return {
             ...MOCK_DATA,
             GAMIFICATION: { ...MOCK_DATA.GAMIFICATION, streakDays: 3 },
-            SCRATCHPAD: {}
+            SCRATCHPAD: {},
+            NODE_NOTES: {}, 
+            PERSONAL_NOTES: {} // Initialize
         };
     });
 
@@ -665,6 +673,67 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         });
     }, []);
 
+    const saveNodeNote = useCallback((userId: string, pathId: string, nodeId: string, content: string) => {
+        setDb(prevDb => {
+            const newDb = JSON.parse(JSON.stringify(prevDb)) as Database;
+            if (!newDb.NODE_NOTES) newDb.NODE_NOTES = {};
+            const key = `${pathId}_${nodeId}_${userId}`;
+            newDb.NODE_NOTES[key] = {
+                id: key,
+                userId,
+                pathId,
+                nodeId,
+                content,
+                lastUpdated: new Date().toISOString()
+            };
+            return newDb;
+        });
+    }, []);
+
+    // --- NOTEBOOK FUNCTIONS (Personal Notes) ---
+    const createPersonalNote = useCallback((userId: string, title: string, content: string, links?: { assignmentId?: string, pathId?: string }) => {
+        setDb(prevDb => {
+            const newDb = JSON.parse(JSON.stringify(prevDb)) as Database;
+            if (!newDb.PERSONAL_NOTES) newDb.PERSONAL_NOTES = {};
+            const id = `note_${Date.now()}`;
+            newDb.PERSONAL_NOTES[id] = {
+                id,
+                userId,
+                title,
+                content,
+                tags: [],
+                linkedAssignmentId: links?.assignmentId,
+                linkedPathId: links?.pathId,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                isPinned: false
+            };
+            return newDb;
+        });
+    }, []);
+
+    const updatePersonalNote = useCallback((noteId: string, data: Partial<PersonalNote>) => {
+        setDb(prevDb => {
+            const newDb = JSON.parse(JSON.stringify(prevDb)) as Database;
+            if (newDb.PERSONAL_NOTES[noteId]) {
+                newDb.PERSONAL_NOTES[noteId] = { 
+                    ...newDb.PERSONAL_NOTES[noteId], 
+                    ...data,
+                    updatedAt: new Date().toISOString() 
+                };
+            }
+            return newDb;
+        });
+    }, []);
+
+    const deletePersonalNote = useCallback((noteId: string) => {
+        setDb(prevDb => {
+            const newDb = JSON.parse(JSON.stringify(prevDb)) as Database;
+            delete newDb.PERSONAL_NOTES[noteId];
+            return newDb;
+        });
+    }, []);
+
     // --- SHOP & GAMIFICATION ---
     const buyShopItem = useCallback((itemId: string) => {
         setDb(prevDb => {
@@ -753,7 +822,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         gradeFileSubmission, sendChatMessage, joinGroup, createGroup, sendGroupMessage,
         addDiscussionPost, sendAnnouncement, dismissAnnouncement, runMockTest,
         addVideoNote, deleteVideoNote, markLessonComplete, createLearningPath,
-        updateNodeProgress, unlockNextNode, extendLearningPath,
+        updateNodeProgress, unlockNextNode, extendLearningPath, saveNodeNote,
+        createPersonalNote, updatePersonalNote, deletePersonalNote,
         buyShopItem, equipShopItem, checkDailyDiamondReward, updateScratchpad, toggleCourseBookmark, completeOnboarding
     }), [
         db, registerUser, toggleUserLock, unlockAllUsers, setApiKey, editLessonContent,
@@ -761,7 +831,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         gradeFileSubmission, sendChatMessage, joinGroup, createGroup, sendGroupMessage,
         addDiscussionPost, sendAnnouncement, dismissAnnouncement, runMockTest,
         addVideoNote, deleteVideoNote, markLessonComplete, createLearningPath,
-        updateNodeProgress, unlockNextNode, extendLearningPath,
+        updateNodeProgress, unlockNextNode, extendLearningPath, saveNodeNote,
+        createPersonalNote, updatePersonalNote, deletePersonalNote,
         buyShopItem, equipShopItem, checkDailyDiamondReward, updateScratchpad, toggleCourseBookmark, completeOnboarding
     ]);
 

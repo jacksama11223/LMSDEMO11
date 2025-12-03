@@ -243,5 +243,28 @@ export const MOCK_DATA: Database = {
           ]
       }
   },
-  SCRATCHPAD: {}
+  SCRATCHPAD: {},
+  NODE_NOTES: {},
+  PERSONAL_NOTES: {
+      "note_1": {
+          id: "note_1",
+          userId: "sv001",
+          title: "Ý tưởng Project cuối kỳ",
+          content: "1. Chủ đề: Xây dựng hệ thống Smart Home.\n2. Công nghệ: IoT, React, Node.js.\n3. Cần tìm hiểu thêm về MQTT.",
+          tags: ["project", "iot"],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          isPinned: true
+      },
+      "note_2": {
+          id: "note_2",
+          userId: "sv001",
+          title: "Ghi chú bài Microservices",
+          content: "API Gateway là cửa ngõ duy nhất.\nService Discovery giúp tìm địa chỉ IP của các service.",
+          tags: ["learning", "architecture"],
+          linkedAssignmentId: "a002",
+          createdAt: new Date(Date.now() - 86400000).toISOString(),
+          updatedAt: new Date(Date.now() - 86400000).toISOString()
+      }
+  }
 };

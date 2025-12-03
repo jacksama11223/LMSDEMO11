@@ -449,3 +449,32 @@ export const generateImageWithGemini = async (
         throw new Error("Failed to generate image.");
     }
 };
+
+// NEW: Enhance Note with AI
+export const enhanceNoteWithGemini = async (
+    apiKey: string,
+    content: string,
+    action: 'summarize' | 'expand' | 'fix' | 'quiz'
+): Promise<string> => {
+    const ai = getGeminiClient(apiKey);
+    let prompt = "";
+    
+    switch(action) {
+        case 'summarize': prompt = "Summarize this note into key bullet points:"; break;
+        case 'expand': prompt = "Explain the concepts in this note in more detail with examples:"; break;
+        case 'fix': prompt = "Fix grammar and improve clarity of this note. Output only the fixed text:"; break;
+        case 'quiz': prompt = "Create 3 review questions based on this note:"; break;
+    }
+
+    const fullPrompt = `${prompt}\n\n"${content}"`;
+
+    try {
+        const response: GenerateContentResponse = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: fullPrompt
+        });
+        return response.text || "";
+    } catch (e) {
+        throw new Error("AI enhancement failed.");
+    }
+};

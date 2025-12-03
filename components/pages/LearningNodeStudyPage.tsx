@@ -4,6 +4,7 @@ import { AuthContext, DataContext, PageContext, GlobalStateContext } from '../..
 import { generateNodeFlashcards, generateNodeExam, generateAdvancedPath } from '../../services/geminiService';
 import type { Flashcard, ExamQuestion } from '../../types';
 import LoadingSpinner from '../common/LoadingSpinner';
+import NodeNoteModal from '../modals/NodeNoteModal';
 
 interface LearningNodeStudyPageProps {
     pathId: string;
@@ -59,6 +60,7 @@ const LearningNodeStudyPage: React.FC<LearningNodeStudyPageProps> = ({ pathId, n
 
     const [phase, setPhase] = useState<StudyPhase>('START');
     const [error, setError] = useState<string | null>(null);
+    const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
 
     // Flashcard State
     const [flashcardQueue, setFlashcardQueue] = useState<Flashcard[]>([]);
@@ -214,11 +216,6 @@ const LearningNodeStudyPage: React.FC<LearningNodeStudyPageProps> = ({ pathId, n
         let xpGain = 0;
 
         if (difficulty === 'easy') {
-            // For 'easy', we consider it done for this session
-            // REMOVED: nextQueue.splice(currentCardIndex, 1); 
-            // FIX: Just move to next index, do NOT remove from queue yet if we want to show progress. 
-            // BUT for queue logic, usually we remove 'done' items. 
-            // Let's stick to "remove from queue" to empty it.
             nextQueue.splice(currentCardIndex, 1); 
             xpGain = 10;
             playSound('correct');
@@ -233,7 +230,6 @@ const LearningNodeStudyPage: React.FC<LearningNodeStudyPageProps> = ({ pathId, n
         setFlashcardQueue(nextQueue);
         setIsFlipped(false);
         
-        // Logic: Only finish when queue is empty
         if (nextQueue.length === 0) {
              playSound('finish');
              const gotReward = checkDailyDiamondReward();
@@ -248,8 +244,6 @@ const LearningNodeStudyPage: React.FC<LearningNodeStudyPageProps> = ({ pathId, n
              alert("Bạn đã hoàn thành phiên học từ vựng!");
              setPhase('START');
         } else {
-            // If we removed the item at index 0, the next item is now at index 0.
-            // So index stays 0.
             setCurrentCardIndex(0);
         }
     };
@@ -375,12 +369,20 @@ const LearningNodeStudyPage: React.FC<LearningNodeStudyPageProps> = ({ pathId, n
 
     const renderStart = () => (
         <div className="flex flex-col items-center justify-center min-h-[600px] space-y-8 animate-pop-in relative">
-            <button 
-                onClick={handleBack}
-                className="absolute top-0 left-0 group flex items-center gap-2 px-5 py-2.5 rounded-full bg-white/5 border border-white/10 text-blue-200 hover:bg-blue-500/20 hover:text-white hover:border-blue-400 hover:shadow-[0_0_20px_rgba(59,130,246,0.5)] transition-all duration-300 backdrop-blur-md"
-            >
-                <span>&larr;</span> <span>Quay lại Lộ trình</span>
-            </button>
+            <div className="absolute top-0 left-0 w-full flex justify-between items-start z-20">
+                <button 
+                    onClick={handleBack}
+                    className="group flex items-center gap-2 px-5 py-2.5 rounded-full bg-white/5 border border-white/10 text-blue-200 hover:bg-blue-500/20 hover:text-white hover:border-blue-400 hover:shadow-[0_0_20px_rgba(59,130,246,0.5)] transition-all duration-300 backdrop-blur-md"
+                >
+                    <span>&larr;</span> <span>Quay lại Lộ trình</span>
+                </button>
+                <button 
+                    onClick={() => setIsNoteModalOpen(true)}
+                    className="group flex items-center gap-2 px-5 py-2.5 rounded-full bg-indigo-900/30 border border-indigo-500/50 text-indigo-200 hover:bg-indigo-500/20 hover:text-white hover:border-indigo-400 hover:shadow-[0_0_20px_rgba(99,102,241,0.5)] transition-all duration-300 backdrop-blur-md"
+                >
+                    <span>📝</span> <span>Sổ tay thông minh</span>
+                </button>
+            </div>
 
             <div className="relative mt-12">
                 <div className="text-9xl animate-bounce-subtle filter drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]">🎓</div>
@@ -657,7 +659,9 @@ const LearningNodeStudyPage: React.FC<LearningNodeStudyPageProps> = ({ pathId, n
     };
 
     return (
-        <div className="max-w-4xl mx-auto min-h-screen pb-12 px-4">
+        <div className="max-w-4xl mx-auto min-h-screen pb-12 px-4 relative">
+            <SkinAtmosphere skinId={equippedSkinId} />
+            
             {error && (
                 <div className="fixed top-20 left-1/2 transform -translate-x-1/2 bg-red-600 text-white px-6 py-3 rounded-full shadow-xl z-50 animate-bounce border-2 border-white">
                     ⚠️ {error}
@@ -682,6 +686,14 @@ const LearningNodeStudyPage: React.FC<LearningNodeStudyPageProps> = ({ pathId, n
                     {phase === 'RESULT' && renderResult()}
                 </>
             )}
+
+            <NodeNoteModal 
+                isOpen={isNoteModalOpen}
+                onClose={() => setIsNoteModalOpen(false)}
+                pathId={pathId}
+                nodeId={nodeId}
+                nodeTitle={node.title}
+            />
         </div>
     );
 };

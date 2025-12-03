@@ -1,3 +1,4 @@
+
 // User & Auth
 export type UserRole = 'STUDENT' | 'TEACHER' | 'ADMIN' | 'SYSTEM';
 export interface User {
@@ -149,6 +150,31 @@ export interface PlacementTestQuestion {
     question: string;
     options: string[];
     correctAnswer: number;
+}
+
+// NEW: Note for Learning Node
+export interface NodeNote {
+    id: string;
+    userId: string;
+    pathId: string;
+    nodeId: string;
+    content: string;
+    lastUpdated: string;
+}
+
+// NEW: Personal Notebook (Notion-like)
+export interface PersonalNote {
+    id: string;
+    userId: string;
+    title: string;
+    content: string;
+    tags: string[];
+    // Linking context
+    linkedAssignmentId?: string;
+    linkedPathId?: string;
+    createdAt: string;
+    updatedAt: string;
+    isPinned?: boolean;
 }
 // -----------------------------------------
 
@@ -341,6 +367,8 @@ export interface Database {
   LESSON_PROGRESS: Record<string, string[]>; // userId -> list of completed lessonIds
   LEARNING_PATHS: Record<string, LearningPath>; // NEW: Store generated learning paths
   SCRATCHPAD: Record<string, string>; // NEW: Simple notes per user
+  NODE_NOTES: Record<string, NodeNote>; // Notes for specific learning nodes. Key: pathId_nodeId_userId
+  PERSONAL_NOTES: Record<string, PersonalNote>; // NEW: Centralized Notebook
 }
 
 // Context Types
@@ -381,7 +409,13 @@ export interface DataContextType {
   updateNodeProgress: (pathId: string, nodeId: string, data: Partial<LearningNode>) => void;
   unlockNextNode: (pathId: string, currentNodeId: string) => void;
   extendLearningPath: (pathId: string, newNodes: LearningNode[]) => void;
+  saveNodeNote: (userId: string, pathId: string, nodeId: string, content: string) => void; // NEW
   
+  // NOTEBOOK FUNCTIONS
+  createPersonalNote: (userId: string, title: string, content: string, links?: { assignmentId?: string, pathId?: string }) => void;
+  updatePersonalNote: (noteId: string, data: Partial<PersonalNote>) => void;
+  deletePersonalNote: (noteId: string) => void;
+
   // Shop & Gamification
   buyShopItem: (itemId: string) => void;
   equipShopItem: (itemId: string) => void;

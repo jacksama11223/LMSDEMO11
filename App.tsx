@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { AuthContext, DataContext, GlobalStateContext, PageContext, DataProvider, AuthProvider, GlobalStateProvider, PageProvider, MusicProvider } from './contexts/AppProviders';
 import GlobalStyles from './components/common/GlobalStyles';
@@ -27,6 +28,7 @@ import SecurityPage from './components/pages/SecurityPage';
 import LearningPathCreatorPage from './components/pages/LearningPathCreatorPage';
 import LearningPathDetailPage from './components/pages/LearningPathDetailPage';
 import LearningNodeStudyPage from './components/pages/LearningNodeStudyPage';
+import NotebookPage from './components/pages/NotebookPage';
 
 const Navigation: React.FC = () => {
   const { user } = useContext(AuthContext)!;
@@ -37,6 +39,7 @@ const Navigation: React.FC = () => {
     const common = [
       { id: 'dashboard', label: 'Trạm Vũ Trụ', icon: '🚀' },
       { id: 'chat', label: 'Liên Lạc', icon: '📡' },
+      { id: 'notebook', label: 'Sổ Tay', icon: '📓' }, // NEW
     ];
     
     if (user?.role === 'STUDENT') {
@@ -144,6 +147,7 @@ const PageRouter: React.FC = () => {
         case 'lesson': return () => <LessonPage lessonId={params.lessonId} />;
         case 'assignment_hub': return AssignmentHubPage;
         case 'chat': return ChatPage;
+        case 'notebook': return NotebookPage; // NEW
         case 'api_key': return ApiKeyPage;
         case 'assignment_viewer': return () => <AssignmentViewerPage assignmentId={params.assignmentId} />;
         case 'group_chat': return GroupChatPage;
@@ -210,6 +214,12 @@ const AppLayout: React.FC = () => {
           targetId: 'nav-group_chat', 
           title: 'Phi Đội (Mới)', 
           content: 'Tính năng mới! Tạo hoặc tham gia các nhóm học tập (Spaceship) để cùng bạn bè chinh phục thử thách.', 
+          position: 'right' 
+      },
+      { 
+          targetId: 'nav-notebook', 
+          title: 'Sổ Tay Không Gian (Mới)', 
+          content: 'Trung tâm ghi chú thông minh. Ghi lại kiến thức, liên kết với bài tập và sử dụng AI để tối ưu hóa việc học.', 
           position: 'right' 
       },
       { 
