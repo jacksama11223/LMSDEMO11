@@ -42,8 +42,24 @@ export const callGeminiApi = async (
         throw new Error("API Key is required but not provided.");
     }
     const ai = getGeminiClient(apiKey);
-    // USER REQUEST: Keep using gemini-2.5-flash for free tier compatibility
-    const modelName = 'gemini-2.5-flash'; 
+    
+    // LOGIC: Model Selection
+    // 1. If Video is attached -> MUST use gemini-3-pro-preview (better multimodal) or gemini-2.5-flash (if short).
+    // 2. If Thinking is requested -> MUST use gemini-3-pro-preview or gemini-2.5-flash with thinking config.
+    // Based on user request: "You MUST use the gemini-3-pro-preview model and set thinkingBudget to 32768" for complex queries.
+    
+    let modelName = 'gemini-2.5-flash'; // Default for fast chat
+    let thinkingBudget = 0;
+
+    const isVideo = options?.fileData?.mimeType.startsWith('video/');
+
+    if (options?.useThinking) {
+        modelName = 'gemini-3-pro-preview';
+        thinkingBudget = 32768; // Max for Gemini 3 Pro
+    } else if (isVideo) {
+        // Video understanding is a complex task, prefer Pro model for better accuracy
+        modelName = 'gemini-3-pro-preview'; 
+    }
 
     try {
         const config: any = {
@@ -52,12 +68,11 @@ export const callGeminiApi = async (
 
         // Enable Thinking Mode if requested
         if (options?.useThinking) {
-             // For Gemini 2.5 Flash, enable thinking with a budget suitable for free tier latency
-             config.thinkingConfig = { thinkingBudget: 10240 }; 
+             config.thinkingConfig = { thinkingBudget: thinkingBudget }; 
              // Do NOT set maxOutputTokens when using thinkingConfig
         }
 
-        let contents: any = prompt;
+        let contents: any;
         
         // Handle Multimodal (Image/Video)
         if (options?.fileData) {
@@ -89,6 +104,7 @@ export const callGeminiApi = async (
     }
 };
 
+// ... (Rest of the file remains unchanged: callGeminiApiWithSchema, generatePlacementTest, etc.)
 export const callGeminiApiWithSchema = async (
     apiKey: string,
     prompt: string,
@@ -309,7 +325,7 @@ export const generateNodeFlashcards = async (apiKey: string, topic: string, desc
 export const generateNodeExam = async (apiKey: string, topic: string): Promise<ExamQuestion[]> => {
     const ai = getGeminiClient(apiKey);
     const fullPrompt = `Generate exactly 15 mixed assessment questions (Multiple Choice, Fill-in-the-gap, Short Answer) to test knowledge on: "${topic}".
-    For MCQ, provide 4 options and the 0-based index of the correct answer as a string. 
+    For MCQ, provide 4 options and the 0-based index of the correct answer in the 'correctAnswer' field as a string (e.g. "0", "1").
     For Fill-in-the-gap/Short Answer, provide the correct text answer in 'correctAnswer' and leave 'options' empty.
     Provide a helpful 'explanation' for why the answer is correct.
     Types: 'mcq', 'fill_gap', 'short_answer'.`;
@@ -395,5 +411,41 @@ export const generateAdvancedPath = async (apiKey: string, previousPathTitle: st
         }));
     } catch (e) {
         throw new Error("Failed to generate advanced path.");
+    }
+};
+export const generateImageWithGemini = async (
+    apiKey: string, 
+    prompt: string,
+    aspectRatio: "1:1" | "16:9" | "9:16" | "4:3" | "3:4" = "1:1"
+): Promise<string> => {
+    const ai = getGeminiClient(apiKey);
+    try {
+        const response: GenerateContentResponse = await ai.models.generateContent({
+            model: 'gemini-3-pro-image-preview', // Requested model
+            contents: {
+                parts: [{ text: prompt }],
+            },
+            config: {
+                imageConfig: {
+                    aspectRatio: aspectRatio,
+                    imageSize: "1K" // Default
+                }
+            },
+        });
+
+        // Extract image
+        // Response format usually contains inlineData in candidates[0].content.parts
+        const parts = response.candidates?.[0]?.content?.parts;
+        if (parts) {
+            for (const part of parts) {
+                if (part.inlineData) {
+                    return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+                }
+            }
+        }
+        throw new Error("No image generated.");
+    } catch (e) {
+        console.error("Image Gen Error", e);
+        throw new Error("Failed to generate image.");
     }
 };

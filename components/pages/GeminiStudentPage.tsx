@@ -1,11 +1,11 @@
 
 import React, { useState, useContext, useCallback, useEffect, useRef } from 'react';
 import { AuthContext, DataContext, GlobalStateContext } from '../../contexts/AppProviders';
-import { callGeminiApi } from '../../services/geminiService';
+import { callGeminiApi, generateImageWithGemini } from '../../services/geminiService';
 import type { GeminiChatMessage } from '../../types';
 
 // --- TYPES ---
-type PersonaId = 'oracle' | 'guardian' | 'jester' | 'commander';
+type PersonaId = 'oracle' | 'guardian' | 'jester' | 'commander' | 'apprentice';
 
 interface Persona {
     id: PersonaId;
@@ -41,6 +41,12 @@ const PERSONAS: Persona[] = [
         desc: 'Ngắn gọn, súc tích, tập trung vào trọng tâm (Ôn thi).',
         color: 'red',
         systemPrompt: "Bạn là Tổng Chỉ Huy Chiến Trường. Học sinh đang trong tình trạng khẩn cấp (sắp thi). Hãy trả lời cực kỳ ngắn gọn, súc tích, gạch đầu dòng rõ ràng. Bỏ qua các lời chào hỏi rườm rà. Tập trung vào Keywords và công thức."
+    },
+    {
+        id: 'apprentice', name: 'Học Giả', title: 'The Apprentice', icon: '📝',
+        desc: 'AI đóng vai học sinh dốt, bạn là thầy giáo (Feynman).',
+        color: 'cyan',
+        systemPrompt: "Bạn là một học sinh 'Học Giả' (The Apprentice) còn non nớt và hơi chậm hiểu. Người dùng là Thầy Giáo của bạn. Nhiệm vụ của bạn là lắng nghe thầy giáo giải thích một khái niệm, sau đó đặt những câu hỏi 'ngây ngô' để kiểm tra xem bạn có hiểu đúng không. Hãy bắt người dùng phải giải thích thật đơn giản. Cuối cùng, hãy đánh giá khả năng giảng dạy của họ."
     }
 ];
 
@@ -53,6 +59,7 @@ const MagicOrb: React.FC<{ state: 'idle' | 'thinking' | 'speaking', color: strin
             case 'emerald': return 'rgba(16, 185, 129, 0.6)';
             case 'orange': return 'rgba(249, 115, 22, 0.6)';
             case 'red': return 'rgba(239, 68, 68, 0.6)';
+            case 'cyan': return 'rgba(34, 211, 238, 0.6)';
             default: return 'rgba(59, 130, 246, 0.6)';
         }
     };
@@ -83,21 +90,28 @@ const MagicOrb: React.FC<{ state: 'idle' | 'thinking' | 'speaking', color: strin
     );
 };
 
+// --- MAIN PAGE ---
 const GeminiStudentPage: React.FC = () => {
     const { user } = useContext(AuthContext)!;
     const { db } = useContext(DataContext)!;
     const { setPage: setGlobalPage } = useContext(GlobalStateContext)!;
 
     const [activePersona, setActivePersona] = useState<Persona>(PERSONAS[0]);
+    const [activeTab, setActiveTab] = useState<'chat' | 'image' | 'video'>('chat'); // NEW: Tabs
     const [chatHistory, setChatHistory] = useState<GeminiChatMessage[]>([]);
     const [prompt, setPrompt] = useState('');
     const [orbState, setOrbState] = useState<'idle' | 'thinking' | 'speaking'>('idle');
     const [error, setError] = useState<string | null>(null);
-    const [resonance, setResonance] = useState(0); // Gamification meter
+    const [resonance, setResonance] = useState(0); 
     
     // Feature States
     const [useThinking, setUseThinking] = useState(false);
     const [attachedFile, setAttachedFile] = useState<{ name: string, type: string, base64: string } | null>(null);
+    const [videoPreview, setVideoPreview] = useState<string | null>(null); // For local preview
+
+    // Image Gen State
+    const [imageAspectRatio, setImageAspectRatio] = useState<"1:1" | "16:9" | "9:16">("1:1");
+    const [generatedImage, setGeneratedImage] = useState<string | null>(null);
 
     const chatEndRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -114,6 +128,17 @@ const GeminiStudentPage: React.FC = () => {
         const file = e.target.files?.[0];
         if (!file) return;
 
+        // Validating type based on tab
+        if (activeTab === 'video' && !file.type.startsWith('video/')) {
+            alert("Vui lòng chọn file video!");
+            return;
+        }
+        if (activeTab === 'chat' && !file.type.startsWith('image/')) {
+            // Chat supports images (Vision), video handled in Video tab for clarity
+            alert("Chế độ chat chỉ hỗ trợ ảnh. Dùng tab Video để phân tích video.");
+            return;
+        }
+
         const reader = new FileReader();
         reader.onload = () => {
             const base64String = (reader.result as string).split(',')[1];
@@ -122,6 +147,9 @@ const GeminiStudentPage: React.FC = () => {
                 type: file.type,
                 base64: base64String
             });
+            if (file.type.startsWith('video/')) {
+                setVideoPreview(URL.createObjectURL(file));
+            }
         };
         reader.readAsDataURL(file);
     };
@@ -136,6 +164,24 @@ const GeminiStudentPage: React.FC = () => {
             return;
         }
 
+        // --- IMAGE GENERATION FLOW ---
+        if (activeTab === 'image') {
+            setOrbState('thinking');
+            setError(null);
+            try {
+                const imgData = await generateImageWithGemini(apiKey, prompt, imageAspectRatio);
+                setGeneratedImage(imgData);
+                setOrbState('speaking');
+            } catch (err: any) {
+                setError(err.message);
+                setOrbState('idle');
+            } finally {
+                setTimeout(() => setOrbState('idle'), 2000);
+            }
+            return;
+        }
+
+        // --- CHAT / VIDEO ANALYSIS FLOW ---
         const userMsg: GeminiChatMessage = { 
             role: 'user', 
             parts: [
@@ -152,8 +198,10 @@ const GeminiStudentPage: React.FC = () => {
         // Keep temp ref to file to send, then clear UI state
         const fileToSend = attachedFile ? { mimeType: attachedFile.type, data: attachedFile.base64 } : null;
         setAttachedFile(null);
+        setVideoPreview(null); // Clear preview after send
 
         try {
+            // If in Video mode or Thinking mode, service will pick gemini-3-pro-preview
             const responseText = await callGeminiApi(apiKey, prompt, activePersona.systemPrompt, {
                 useThinking: useThinking,
                 fileData: fileToSend
@@ -170,7 +218,7 @@ const GeminiStudentPage: React.FC = () => {
             setError(err instanceof Error ? err.message : "Lỗi kết nối vũ trụ.");
             setOrbState('idle');
         }
-    }, [prompt, orbState, user, db.USERS, activePersona, useThinking, attachedFile]);
+    }, [prompt, orbState, user, db.USERS, activePersona, useThinking, attachedFile, activeTab, imageAspectRatio]);
 
     const openApiKeyModal = () => {
         setGlobalPage('api_key', { isApiKeyModalOpen: true });
@@ -189,7 +237,7 @@ const GeminiStudentPage: React.FC = () => {
             <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-gradient-to-br from-white/5 to-transparent rounded-full blur-3xl"></div>
 
             {/* LEFT PANEL */}
-            <div className="lg:w-1/3 flex flex-col items-center z-10 space-y-8 py-4">
+            <div className="lg:w-1/3 flex flex-col items-center z-10 space-y-6 py-4 overflow-y-auto">
                 
                 <div className="relative mt-4">
                     <MagicOrb state={orbState} color={activePersona.color} />
@@ -202,43 +250,79 @@ const GeminiStudentPage: React.FC = () => {
                     <p className="text-sm text-gray-300 italic">"{activePersona.desc}"</p>
                 </div>
 
-                <div className="w-full px-6">
-                    <p className="text-xs font-bold text-gray-500 mb-3 uppercase tracking-wider">Triệu hồi Linh hồn:</p>
-                    <div className="grid grid-cols-2 gap-3">
-                        {PERSONAS.map(p => (
-                            <button 
-                                key={p.id}
-                                onClick={() => handlePersonaChange(p)}
-                                className={`flex items-center gap-2 p-3 rounded-xl border transition-all duration-300
-                                    ${activePersona.id === p.id 
-                                        ? `bg-${p.color}-600/20 border-${p.color}-400 shadow-[0_0_15px_rgba(255,255,255,0.1)] scale-105` 
-                                        : 'bg-white/5 border-white/10 hover:bg-white/10 grayscale hover:grayscale-0'}
-                                `}
-                            >
-                                <span className="text-2xl">{p.icon}</span>
-                                <div className="text-left">
-                                    <p className={`text-xs font-bold ${activePersona.id === p.id ? 'text-white' : 'text-gray-400'}`}>{p.name}</p>
-                                </div>
-                            </button>
-                        ))}
-                    </div>
+                {/* TABS */}
+                <div className="flex bg-black/40 p-1 rounded-xl border border-white/10 mx-6">
+                    {(['chat', 'image', 'video'] as const).map(tab => (
+                        <button
+                            key={tab}
+                            onClick={() => { setActiveTab(tab); setGeneratedImage(null); setError(null); }}
+                            className={`flex-1 py-2 text-xs font-bold uppercase rounded-lg transition-all ${activeTab === tab ? `bg-${activePersona.color}-600 text-white shadow-lg` : 'text-gray-400 hover:text-white'}`}
+                        >
+                            {tab === 'chat' ? 'Trò Chuyện' : tab === 'image' ? 'Vẽ Tranh' : 'Phân tích Video'}
+                        </button>
+                    ))}
                 </div>
 
-                {/* ADVANCED AI CONTROLS */}
-                <div className="w-full px-6 space-y-3">
-                    <div className="flex items-center justify-between bg-black/40 p-3 rounded-xl border border-white/5">
-                        <span className="text-sm text-blue-200 font-bold flex items-center gap-2">
-                            🧠 Thinking Mode
-                        </span>
-                        <button 
-                            onClick={() => setUseThinking(!useThinking)}
-                            className={`w-10 h-5 rounded-full relative transition-colors duration-300 ${useThinking ? 'bg-blue-500' : 'bg-gray-700'}`}
-                        >
-                            <div className={`w-3 h-3 bg-white rounded-full absolute top-1 transition-all duration-300 ${useThinking ? 'left-6' : 'left-1'}`}></div>
-                        </button>
+                {activeTab !== 'image' && (
+                    <div className="w-full px-6">
+                        <p className="text-xs font-bold text-gray-500 mb-3 uppercase tracking-wider">Triệu hồi Linh hồn:</p>
+                        <div className="grid grid-cols-2 gap-3">
+                            {PERSONAS.map(p => (
+                                <button 
+                                    key={p.id}
+                                    onClick={() => handlePersonaChange(p)}
+                                    className={`flex items-center gap-2 p-3 rounded-xl border transition-all duration-300
+                                        ${activePersona.id === p.id 
+                                            ? `bg-${p.color}-600/20 border-${p.color}-400 shadow-[0_0_15px_rgba(255,255,255,0.1)] scale-105` 
+                                            : 'bg-white/5 border-white/10 hover:bg-white/10 grayscale hover:grayscale-0'}
+                                    `}
+                                >
+                                    <span className="text-2xl">{p.icon}</span>
+                                    <div className="text-left">
+                                        <p className={`text-xs font-bold ${activePersona.id === p.id ? 'text-white' : 'text-gray-400'}`}>{p.name}</p>
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
                     </div>
-                    {useThinking && <p className="text-[10px] text-blue-300/60 text-center">Sử dụng Gemini 2.5 Flash Thinking (siêu tốc & tiết kiệm).</p>}
-                </div>
+                )}
+
+                {/* ADVANCED AI CONTROLS */}
+                {activeTab !== 'image' && (
+                    <div className="w-full px-6 space-y-3">
+                        <div className="flex items-center justify-between bg-black/40 p-3 rounded-xl border border-white/5">
+                            <span className="text-sm text-blue-200 font-bold flex items-center gap-2">
+                                🧠 Thinking Mode
+                            </span>
+                            <button 
+                                onClick={() => setUseThinking(!useThinking)}
+                                className={`w-10 h-5 rounded-full relative transition-colors duration-300 ${useThinking ? 'bg-blue-500' : 'bg-gray-700'}`}
+                            >
+                                <div className={`w-3 h-3 bg-white rounded-full absolute top-1 transition-all duration-300 ${useThinking ? 'left-6' : 'left-1'}`}></div>
+                            </button>
+                        </div>
+                        {useThinking && <p className="text-[10px] text-blue-300/60 text-center">Sử dụng Gemini 3 Pro Preview (Max Thinking Budget: 32768).</p>}
+                        {!useThinking && activeTab === 'video' && <p className="text-[10px] text-purple-300/60 text-center">Video tự động dùng Gemini 3 Pro.</p>}
+                    </div>
+                )}
+
+                {/* IMAGE CONFIG */}
+                {activeTab === 'image' && (
+                    <div className="w-full px-6 space-y-3">
+                        <p className="text-xs font-bold text-gray-500 uppercase">Tỷ lệ khung hình:</p>
+                        <div className="flex gap-2">
+                            {(['1:1', '16:9', '9:16'] as const).map(ratio => (
+                                <button 
+                                    key={ratio}
+                                    onClick={() => setImageAspectRatio(ratio)}
+                                    className={`flex-1 py-2 rounded border text-xs font-bold ${imageAspectRatio === ratio ? 'bg-blue-600 border-blue-400 text-white' : 'bg-black/20 border-white/10 text-gray-400'}`}
+                                >
+                                    {ratio}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 <div className="w-full px-6 mt-auto mb-4">
                     <div className="flex justify-between text-xs text-gray-400 mb-1">
@@ -254,58 +338,85 @@ const GeminiStudentPage: React.FC = () => {
                 </div>
             </div>
 
-            {/* RIGHT PANEL: CHAT INTERFACE */}
+            {/* RIGHT PANEL: INTERFACE */}
             <div className="flex-1 flex flex-col z-10 bg-black/30 backdrop-blur-xl border border-white/10 rounded-[2rem] shadow-2xl overflow-hidden relative mx-4 lg:mr-4 mb-4">
-                
                 <div className="h-1 w-full bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
 
-                <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-                    {chatHistory.length === 0 && (
-                        <div className="h-full flex flex-col items-center justify-center text-gray-500 opacity-60">
-                            <div className="text-6xl mb-4 animate-bounce">{activePersona.icon}</div>
-                            <p>Ta đang lắng nghe... Hãy hỏi bất cứ điều gì.</p>
-                            <p className="text-xs mt-2 text-gray-600">Hỗ trợ Phân tích Ảnh & Video</p>
-                        </div>
-                    )}
+                {/* CONTENT AREA */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar relative">
                     
-                    {chatHistory.map((msg, index) => (
-                        <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start group'}`}>
-                            <div className={`relative max-w-[85%] p-4 rounded-2xl border backdrop-blur-md transition-all duration-300 hover:scale-[1.01]
-                                ${msg.role === 'user' 
-                                    ? 'bg-blue-600/80 border-blue-400/50 text-white rounded-tr-none shadow-[0_5px_15px_rgba(37,99,235,0.3)]' 
-                                    : `bg-gray-800/80 border-${activePersona.color}-500/30 text-gray-100 rounded-tl-none shadow-[0_5px_15px_rgba(0,0,0,0.3)]`
-                                }`
-                            }>
-                                {/* Display Attached Media */}
-                                {msg.parts.find(p => p.inlineData) && (
-                                    <div className="mb-3 rounded-lg overflow-hidden border border-white/20">
-                                        {msg.parts.find(p => p.inlineData)?.inlineData?.mimeType.startsWith('video') ? (
-                                             <div className="bg-black p-2 text-center text-xs">📹 [Video Attached]</div>
-                                        ) : (
-                                            <img 
-                                                src={`data:${msg.parts.find(p => p.inlineData)?.inlineData?.mimeType};base64,${msg.parts.find(p => p.inlineData)?.inlineData?.data}`} 
-                                                alt="User upload" 
-                                                className="max-w-full h-auto max-h-60 object-contain"
-                                            />
+                    {/* CHAT / VIDEO MODE */}
+                    {activeTab !== 'image' && (
+                        <>
+                            {chatHistory.length === 0 && (
+                                <div className="h-full flex flex-col items-center justify-center text-gray-500 opacity-60">
+                                    <div className="text-6xl mb-4 animate-bounce">{activeTab === 'video' ? '📹' : activePersona.icon}</div>
+                                    <p>{activeTab === 'video' ? 'Upload video để phân tích (Gemini 3 Pro).' : `Ta đang lắng nghe... Hãy hỏi bất cứ điều gì.`}</p>
+                                    {activePersona.id === 'apprentice' && <p className="text-xs mt-2 text-cyan-400">Hãy dạy tớ đi thầy ơi!</p>}
+                                </div>
+                            )}
+                            
+                            {chatHistory.map((msg, index) => (
+                                <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start group'}`}>
+                                    <div className={`relative max-w-[85%] p-4 rounded-2xl border backdrop-blur-md transition-all duration-300 hover:scale-[1.01]
+                                        ${msg.role === 'user' 
+                                            ? 'bg-blue-600/80 border-blue-400/50 text-white rounded-tr-none shadow-[0_5px_15px_rgba(37,99,235,0.3)]' 
+                                            : `bg-gray-800/80 border-${activePersona.color}-500/30 text-gray-100 rounded-tl-none shadow-[0_5px_15px_rgba(0,0,0,0.3)]`
+                                        }`
+                                    }>
+                                        {/* Display Attached Media */}
+                                        {msg.parts.find(p => p.inlineData) && (
+                                            <div className="mb-3 rounded-lg overflow-hidden border border-white/20">
+                                                {msg.parts.find(p => p.inlineData)?.inlineData?.mimeType.startsWith('video') ? (
+                                                     <div className="bg-black p-4 text-center">
+                                                        <span className="text-2xl">📹</span>
+                                                        <p className="text-xs text-gray-400 mt-2">Video sent for analysis</p>
+                                                     </div>
+                                                ) : (
+                                                    <img 
+                                                        src={`data:${msg.parts.find(p => p.inlineData)?.inlineData?.mimeType};base64,${msg.parts.find(p => p.inlineData)?.inlineData?.data}`} 
+                                                        alt="User upload" 
+                                                        className="max-w-full h-auto max-h-60 object-contain"
+                                                    />
+                                                )}
+                                            </div>
+                                        )}
+
+                                        <div className="prose prose-invert max-w-none prose-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: msg.parts.find(p=>p.text)?.text?.replace(/\n/g, '<br />') || '' }} />
+                                        
+                                        {msg.role === 'model' && (
+                                            <button 
+                                                onClick={() => crystallizeInsight(msg.parts[0].text || '')}
+                                                className="absolute -bottom-3 -right-3 bg-gray-900 border border-yellow-500 text-yellow-400 text-[10px] font-bold px-2 py-1 rounded-full opacity-0 group-hover:opacity-100 transition-all hover:scale-110 hover:bg-yellow-900 flex items-center gap-1"
+                                                title="Lưu vào Sổ tay & Nhận XP"
+                                            >
+                                                <span>💎</span> KẾT TINH
+                                            </button>
                                         )}
                                     </div>
-                                )}
+                                </div>
+                            ))}
+                            <div ref={chatEndRef} />
+                        </>
+                    )}
 
-                                <div className="prose prose-invert max-w-none prose-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: msg.parts.find(p=>p.text)?.text?.replace(/\n/g, '<br />') || '' }} />
-                                
-                                {msg.role === 'model' && (
-                                    <button 
-                                        onClick={() => crystallizeInsight(msg.parts[0].text || '')}
-                                        className="absolute -bottom-3 -right-3 bg-gray-900 border border-yellow-500 text-yellow-400 text-[10px] font-bold px-2 py-1 rounded-full opacity-0 group-hover:opacity-100 transition-all hover:scale-110 hover:bg-yellow-900 flex items-center gap-1"
-                                        title="Lưu vào Sổ tay & Nhận XP"
-                                    >
-                                        <span>💎</span> KẾT TINH
-                                    </button>
-                                )}
-                            </div>
+                    {/* IMAGE MODE */}
+                    {activeTab === 'image' && (
+                        <div className="flex flex-col items-center justify-center h-full">
+                            {generatedImage ? (
+                                <div className="relative group">
+                                    <img src={generatedImage} alt="Generated" className="max-h-[70vh] rounded-lg shadow-2xl border border-white/20" />
+                                    <a href={generatedImage} download="gemini-art.png" className="absolute bottom-4 right-4 bg-black/60 text-white px-3 py-1 rounded-full text-xs hover:bg-black/80">⬇ Lưu ảnh</a>
+                                </div>
+                            ) : (
+                                <div className="text-center text-gray-500">
+                                    <div className="text-6xl mb-4">🎨</div>
+                                    <p>Mô tả bức tranh bạn muốn vẽ...</p>
+                                    <p className="text-xs mt-2 text-gray-600">Model: Gemini 3 Pro Image Preview</p>
+                                </div>
+                            )}
                         </div>
-                    ))}
-                    <div ref={chatEndRef} />
+                    )}
                 </div>
 
                 {error && (
@@ -321,27 +432,34 @@ const GeminiStudentPage: React.FC = () => {
 
                 {/* ATTACHMENT PREVIEW */}
                 {attachedFile && (
-                    <div className="px-4 py-2 bg-black/40 flex items-center gap-2">
-                        <span className="text-xs text-blue-300 truncate max-w-[200px]">📎 {attachedFile.name}</span>
-                        <button onClick={() => setAttachedFile(null)} className="text-red-400 hover:text-red-300 text-xs">✕</button>
+                    <div className="px-4 py-2 bg-black/40 flex items-center gap-2 border-t border-white/5">
+                        <span className="text-xs text-blue-300 truncate max-w-[200px]">
+                            {attachedFile.type.startsWith('video') ? '📹' : '📎'} {attachedFile.name}
+                        </span>
+                        {videoPreview && (
+                            <video src={videoPreview} className="h-10 w-10 object-cover rounded border border-white/20" muted />
+                        )}
+                        <button onClick={() => { setAttachedFile(null); setVideoPreview(null); }} className="text-red-400 hover:text-red-300 text-xs ml-auto">✕ Hủy</button>
                     </div>
                 )}
 
-                {/* Input Area */}
+                {/* INPUT AREA */}
                 <form onSubmit={handleSend} className="p-4 bg-black/20 border-t border-white/5 flex gap-3 items-center">
+                    {/* Media Upload Button */}
                     <button 
                         type="button" 
                         onClick={() => fileInputRef.current?.click()}
-                        className="p-3 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-all"
-                        title="Upload Image/Video"
+                        className={`p-3 rounded-xl transition-all ${activeTab === 'chat' || activeTab === 'video' ? 'bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white' : 'opacity-20 cursor-not-allowed bg-gray-900'}`}
+                        title={activeTab === 'video' ? "Upload Video" : "Upload Image"}
+                        disabled={activeTab === 'image'}
                     >
-                        📷
+                        {activeTab === 'video' ? '📹' : '📷'}
                     </button>
                     <input 
                         type="file" 
                         ref={fileInputRef} 
                         className="hidden" 
-                        accept="image/*,video/*" 
+                        accept={activeTab === 'video' ? "video/*" : "image/*"} 
                         onChange={handleFileSelect}
                     />
 
@@ -349,7 +467,7 @@ const GeminiStudentPage: React.FC = () => {
                         <input 
                             type="text" 
                             className={`w-full bg-gray-900/50 border border-gray-600 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-${activePersona.color}-500 transition-all placeholder-gray-500`}
-                            placeholder={`Hỏi ${activePersona.name}...`}
+                            placeholder={activeTab === 'image' ? "Mô tả bức tranh..." : (activeTab === 'video' ? "Hỏi về video này..." : `Hỏi ${activePersona.name}...`)}
                             value={prompt}
                             onChange={(e) => setPrompt(e.target.value)}
                             disabled={orbState === 'thinking'}
