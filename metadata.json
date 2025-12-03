@@ -1,0 +1,5 @@
+{
+  "name": "Copy of LMS Demo NEWWW1",
+  "description": "A feature-rich demonstration of a Learning Management System (LMS) built with React and TypeScript, showcasing student, teacher, and admin roles with features like course management, assignments, real-time chat, Gemini AI integration, and advanced administrative controls for resilience and feature flagging.",
+  "requestFramePermissions": []
+}
