@@ -1,3 +1,4 @@
+
 import React, { useContext, useMemo, useState, useEffect, useRef } from 'react';
 import { AuthContext, DataContext, GlobalStateContext, PageContext, MusicContext } from '../../contexts/AppProviders';
 import { useFeatureFlag } from '../../hooks/useAppHooks';
@@ -35,33 +36,29 @@ const SpaceWeatherWidget = () => {
     );
 };
 
-const FocusTimerWidget = () => {
-    const [seconds, setSeconds] = useState(25 * 60);
-    const [isActive, setIsActive] = useState(false);
-
+export const FocusTimerWidget = () => {
+    const { pomodoro } = useContext(GlobalStateContext)!;
+    // Use Global State so it persists in PiP
+    
     useEffect(() => {
-        let interval: number | null = null;
-        if (isActive && seconds > 0) {
-            interval = window.setInterval(() => setSeconds(s => s - 1), 1000);
-        } else if (seconds === 0) {
-            setIsActive(false);
-            alert("⏰ Hết giờ tập trung!");
-            setSeconds(25 * 60);
+        if (pomodoro.seconds === 0 && pomodoro.isActive) {
+             alert("⏰ Hết giờ tập trung!");
+             pomodoro.setIsActive(false);
+             pomodoro.setSeconds(25*60);
         }
-        return () => { if (interval) clearInterval(interval); };
-    }, [isActive, seconds]);
+    }, [pomodoro.seconds, pomodoro.isActive]);
 
     const fmt = (s: number) => `${Math.floor(s / 60).toString().padStart(2,'0')}:${(s % 60).toString().padStart(2,'0')}`;
 
     return (
-        <div className="card p-4 bg-red-900/10 border-red-500/30 flex flex-col items-center">
+        <div className="card p-4 bg-red-900/10 border-red-500/30 flex flex-col items-center h-full justify-center">
             <h3 className="text-xs font-bold text-red-300 uppercase mb-2">Pomodoro Focus</h3>
-            <div className="text-3xl font-mono font-bold text-white mb-3 tracking-widest">{fmt(seconds)}</div>
+            <div className="text-3xl font-mono font-bold text-white mb-3 tracking-widest">{fmt(pomodoro.seconds)}</div>
             <div className="flex gap-2">
-                <button onClick={() => setIsActive(!isActive)} className={`px-3 py-1 rounded text-xs font-bold ${isActive ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-300'}`}>
-                    {isActive ? 'Pause' : 'Start'}
+                <button onClick={() => pomodoro.setIsActive(!pomodoro.isActive)} className={`px-3 py-1 rounded text-xs font-bold ${pomodoro.isActive ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-300'}`}>
+                    {pomodoro.isActive ? 'Pause' : 'Start'}
                 </button>
-                <button onClick={() => { setIsActive(false); setSeconds(25*60); }} className="px-3 py-1 rounded text-xs font-bold bg-gray-700 text-gray-300">Reset</button>
+                <button onClick={() => { pomodoro.setIsActive(false); pomodoro.setSeconds(25*60); }} className="px-3 py-1 rounded text-xs font-bold bg-gray-700 text-gray-300">Reset</button>
             </div>
         </div>
     );
@@ -69,7 +66,7 @@ const FocusTimerWidget = () => {
 
 // --- DYNAMIC AUDIO VISUALIZER ---
 // Re-implemented to use the global Audio Element
-const AudioVisualizer: React.FC<{ audioElement: HTMLAudioElement | null, isPlaying: boolean }> = ({ audioElement, isPlaying }) => {
+export const AudioVisualizer: React.FC<{ audioElement: HTMLAudioElement | null, isPlaying: boolean }> = ({ audioElement, isPlaying }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const audioCtxRef = useRef<AudioContext | null>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
@@ -151,7 +148,7 @@ const AudioVisualizer: React.FC<{ audioElement: HTMLAudioElement | null, isPlayi
     return <canvas ref={canvasRef} width={200} height={100} className="absolute inset-0 w-full h-full opacity-30 pointer-events-none mix-blend-screen" />;
 };
 
-const MusicWidget = () => {
+export const MusicWidget = () => {
     // Consume Global Music Context
     const music = useContext(MusicContext)!;
     

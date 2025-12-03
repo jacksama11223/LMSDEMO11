@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect, useContext, useMemo } from 'react';
+import React, { useState, useEffect, useContext, useMemo, useRef } from 'react';
 import { AuthContext, DataContext, GlobalStateContext, PageContext, DataProvider, AuthProvider, GlobalStateProvider, PageProvider, MusicProvider } from './contexts/AppProviders';
 import GlobalStyles from './components/common/GlobalStyles';
 import NotificationBell from './components/common/NotificationBell';
@@ -8,7 +7,7 @@ import OnboardingTour, { TourStep } from './components/common/OnboardingTour';
 import LockoutScreen from './components/auth/LockoutScreen';
 import AuthPage from './components/auth/AuthPage';
 
-import StudentDashboardPage from './components/pages/StudentDashboardPage';
+import StudentDashboardPage, { MusicWidget, FocusTimerWidget } from './components/pages/StudentDashboardPage';
 import TeacherDashboardPage from './components/pages/TeacherDashboardPage';
 import AdminDashboardPage from './components/pages/AdminDashboardPage';
 import CourseDetailPage from './components/pages/CourseDetailPage';
@@ -29,6 +28,80 @@ import LearningPathCreatorPage from './components/pages/LearningPathCreatorPage'
 import LearningPathDetailPage from './components/pages/LearningPathDetailPage';
 import LearningNodeStudyPage from './components/pages/LearningNodeStudyPage';
 import NotebookPage from './components/pages/NotebookPage';
+
+// --- DRAGGABLE FLOATING WIDGET ---
+const FloatingWidget: React.FC<{ children: React.ReactNode; initialPos: { x: number; y: number } }> = ({ children, initialPos }) => {
+    const [pos, setPos] = useState(initialPos);
+    const [isDragging, setIsDragging] = useState(false);
+    const ref = useRef<HTMLDivElement>(null);
+    const offset = useRef({ x: 0, y: 0 });
+
+    const handleMouseDown = (e: React.MouseEvent) => {
+        // Only drag if clicking the header/container, not buttons/inputs inside
+        if (ref.current && (e.target as HTMLElement).closest('.drag-handle')) {
+            setIsDragging(true);
+            offset.current = {
+                x: e.clientX - ref.current.getBoundingClientRect().left,
+                y: e.clientY - ref.current.getBoundingClientRect().top
+            };
+        }
+    };
+
+    useEffect(() => {
+        const handleMouseMove = (e: MouseEvent) => {
+            if (isDragging) {
+                setPos({
+                    x: e.clientX - offset.current.x,
+                    y: e.clientY - offset.current.y
+                });
+            }
+        };
+        const handleMouseUp = () => setIsDragging(false);
+
+        if (isDragging) {
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
+        }
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isDragging]);
+
+    return (
+        <div 
+            ref={ref}
+            onMouseDown={handleMouseDown}
+            style={{ 
+                position: 'fixed', 
+                left: pos.x, 
+                top: pos.y, 
+                zIndex: 9999, 
+            }}
+            className="transition-shadow duration-300 hover:shadow-2xl animate-fade-in"
+        >
+            <div className="bg-slate-900/90 backdrop-blur-2xl border border-white/20 rounded-2xl overflow-hidden shadow-[0_0_40px_rgba(0,0,0,0.5)] flex flex-col w-[340px]">
+                {/* Drag Handle / Header */}
+                <div className="drag-handle h-8 bg-gradient-to-r from-blue-900/50 to-purple-900/50 border-b border-white/10 flex items-center justify-between px-3 cursor-grab active:cursor-grabbing">
+                    <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-red-500/80 animate-pulse"></span>
+                        <span className="text-[10px] font-bold text-blue-200 uppercase tracking-widest">Mission Control</span>
+                    </div>
+                    <div className="flex gap-1 opacity-50">
+                        <div className="w-1 h-4 bg-white/20 rounded-full"></div>
+                        <div className="w-1 h-4 bg-white/20 rounded-full"></div>
+                        <div className="w-1 h-4 bg-white/20 rounded-full"></div>
+                    </div>
+                </div>
+                
+                {/* Content Container */}
+                <div className="p-2 space-y-2 max-h-[70vh] overflow-y-auto custom-scrollbar bg-black/40">
+                    {children}
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const Navigation: React.FC = () => {
   const { user } = useContext(AuthContext)!;
@@ -172,7 +245,7 @@ const AppLayout: React.FC = () => {
   const { user } = useContext(AuthContext)!;
   const { page: globalPage, pageParams: globalPageParams } = useContext(GlobalStateContext)!;
   const { completeOnboarding } = useContext(DataContext)!;
-  const { navigate } = useContext(PageContext)!;
+  const { navigate, page } = useContext(PageContext)!; // Get current page to determine PiP
 
   const isApiKeyModalOpen = useMemo(() => globalPage === 'api_key' && globalPageParams?.isApiKeyModalOpen, [globalPage, globalPageParams]);
 
@@ -268,6 +341,20 @@ const AppLayout: React.FC = () => {
           </div>
        </main>
        
+       {/* Picture-in-Picture Floating Widget (Combined) */}
+       {user?.role === 'STUDENT' && page !== 'dashboard' && (
+          <FloatingWidget initialPos={{ x: window.innerWidth - 360, y: window.innerHeight - 500 }}>
+             <div className="flex flex-col gap-2">
+                 <div className="bg-red-900/20 rounded-xl overflow-hidden border border-red-500/20">
+                    <FocusTimerWidget />
+                 </div>
+                 <div className="rounded-xl overflow-hidden">
+                    <MusicWidget />
+                 </div>
+             </div>
+          </FloatingWidget>
+       )}
+
        <GeminiAPIKeyModal isOpen={isApiKeyModalOpen} onClose={() => navigate('dashboard')} />
        
        {/* Onboarding Tour */}

@@ -435,6 +435,12 @@ export interface GlobalStateContextType {
   page: string;
   pageParams: Record<string, any>;
   setPage: (pageName: string, params?: Record<string, any>) => void;
+  pomodoro: {
+    seconds: number;
+    isActive: boolean;
+    setSeconds: (seconds: number | ((prev: number) => number)) => void;
+    setIsActive: (active: boolean | ((prev: boolean) => boolean)) => void;
+  };
 }
 
 export interface PageContextType {

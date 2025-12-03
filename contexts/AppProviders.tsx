@@ -910,10 +910,33 @@ export const GlobalStateProvider: React.FC<GlobalStateProviderProps> = ({ childr
         setPageParams(params);
     }, []);
 
+    // NEW: Pomodoro Global State
+    const [pomodoroSeconds, setPomodoroSeconds] = useState(25 * 60);
+    const [isPomodoroActive, setIsPomodoroActive] = useState(false);
+
+    useEffect(() => {
+        let interval: number | null = null;
+        if (isPomodoroActive && pomodoroSeconds > 0) {
+            interval = window.setInterval(() => setPomodoroSeconds(s => s - 1), 1000);
+        } else if (pomodoroSeconds === 0) {
+            setIsPomodoroActive(false);
+            // Ideally trigger a notification/sound here, but simplistic for now
+            setPomodoroSeconds(25 * 60);
+        }
+        return () => { if (interval) clearInterval(interval); };
+    }, [isPomodoroActive, pomodoroSeconds]);
+
+    const pomodoro = useMemo(() => ({
+        seconds: pomodoroSeconds,
+        isActive: isPomodoroActive,
+        setSeconds: setPomodoroSeconds,
+        setIsActive: setIsPomodoroActive
+    }), [pomodoroSeconds, isPomodoroActive]);
+
     const value = useMemo(() => ({
         featureFlags, setFeatureFlag, serviceStatus, toggleServiceStatus,
-        page, pageParams, setPage: setGlobalPageState,
-    }), [featureFlags, setFeatureFlag, serviceStatus, toggleServiceStatus, page, pageParams, setGlobalPageState]);
+        page, pageParams, setPage: setGlobalPageState, pomodoro
+    }), [featureFlags, setFeatureFlag, serviceStatus, toggleServiceStatus, page, pageParams, setGlobalPageState, pomodoro]);
 
     return <GlobalStateContext.Provider value={value}>{children}</GlobalStateContext.Provider>;
 };
