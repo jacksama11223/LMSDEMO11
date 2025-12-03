@@ -160,8 +160,9 @@ const MusicWidget = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(e.target.files || []);
-        const validFiles = files.filter(f => f.type === 'audio/mpeg' || f.name.endsWith('.mp3'));
+        if (!e.target.files) return;
+        const files = Array.from(e.target.files);
+        const validFiles = files.filter((f: File) => f.type === 'audio/mpeg' || f.name.endsWith('.mp3'));
         if (validFiles.length > 0) {
             music.addTracks(validFiles);
         }

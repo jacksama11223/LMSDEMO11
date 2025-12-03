@@ -62,6 +62,36 @@ const WeeklyChest: React.FC<{ activeDays: number }> = ({ activeDays }) => {
     );
 };
 
+// --- COMPONENT: DAILY QUESTS ---
+const DailyQuestWidget = () => {
+    const quests = [
+        { id: 1, title: 'Đăng nhập trước 9h', reward: '10 XP', done: true },
+        { id: 2, title: 'Hoàn thành 1 Quiz', reward: '50 XP', done: false },
+        { id: 3, title: 'Thảo luận 1 bài', reward: '20 XP', done: false },
+    ];
+
+    return (
+        <div className="card p-4 bg-gradient-to-br from-indigo-900/30 to-purple-900/30 border border-indigo-500/30">
+            <h3 className="text-xs font-bold text-indigo-300 uppercase mb-3 flex items-center gap-2">
+                <span>📅</span> Nhiệm vụ Hàng ngày
+            </h3>
+            <div className="space-y-2">
+                {quests.map(q => (
+                    <div key={q.id} className="flex items-center justify-between p-2 bg-black/20 rounded-lg border border-white/5">
+                        <div className="flex items-center gap-2">
+                            <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${q.done ? 'bg-green-500 border-green-500' : 'border-gray-500'}`}>
+                                {q.done && <span className="text-[10px] text-white">✓</span>}
+                            </div>
+                            <span className={`text-sm ${q.done ? 'text-gray-500 line-through' : 'text-gray-200'}`}>{q.title}</span>
+                        </div>
+                        <span className="text-xs text-yellow-400 font-bold">{q.reward}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
 // --- COMPONENT: AI COMMANDER ---
 const AiCommander: React.FC<{ recommendedTask: any, onClick: () => void }> = ({ recommendedTask, onClick }) => {
     if (!recommendedTask) return (
@@ -155,9 +185,12 @@ const AssignmentHubPage: React.FC = () => {
         const rankColor = getRankColor(asg.rank);
         const badge = getRankBadge(asg.rank);
         const xpReward = asg.rank === 'S' ? 500 : asg.rank === 'A' ? 300 : 100;
+        
+        // SPECIAL BOSS STYLING FOR RANK S
+        const isBoss = asg.rank === 'S';
 
         return (
-            <div key={asg.id} className={`card p-0 flex flex-col border-2 transition-all duration-300 group hover:-translate-y-2 hover:shadow-2xl ${rankColor} ${isDone ? 'opacity-60 grayscale' : ''}`}>
+            <div key={asg.id} className={`card p-0 flex flex-col border-2 transition-all duration-300 group hover:-translate-y-2 hover:shadow-2xl ${rankColor} ${isDone ? 'opacity-60 grayscale' : ''} ${isBoss ? 'scale-[1.02] border-yellow-500' : ''}`}>
                 {/* Card Header */}
                 <div className="p-4 border-b border-white/5 flex justify-between items-start">
                     <span className={`text-[10px] font-black px-2 py-0.5 rounded border ${badge.color}`}>
@@ -169,24 +202,27 @@ const AssignmentHubPage: React.FC = () => {
                 </div>
                 
                 {/* Card Body */}
-                <div className="p-6 flex-1">
+                <div className="p-6 flex-1 relative overflow-hidden">
+                    {isBoss && <div className="absolute -right-4 -bottom-4 text-8xl opacity-10 rotate-12 pointer-events-none">👹</div>}
+                    
                     <h3 className="text-xl font-bold text-white mb-2 group-hover:text-blue-200 transition-colors line-clamp-2">{asg.title}</h3>
                     <div className="flex items-center gap-2 text-sm text-gray-400">
                         <span>{asg.type === 'quiz' ? '⚡ Trắc nghiệm' : '📄 Nộp File'}</span>
                         <span>•</span>
                         <span className="text-yellow-400 font-bold">+{xpReward} XP</span>
                     </div>
+                    {isBoss && <p className="text-xs text-red-400 font-bold mt-2 animate-pulse">⚠️ BOSS RAID: Độ khó cao!</p>}
                 </div>
 
                 {/* Card Footer */}
-                <div className="p-4 bg-black/20 flex justify-between items-center">
+                <div className="p-4 bg-black/20 flex justify-between items-center relative z-10">
                     <span className="text-xs text-gray-500">{isDone ? 'Đã hoàn thành' : 'Chưa hoàn thành'}</span>
                     <button
                         onClick={() => navigate(user?.role === 'TEACHER' ? 'gradebook' : 'assignment_viewer', { assignmentId: asg.id })}
                         className={`btn btn-sm text-xs px-4 py-2 rounded-lg shadow-lg ${isDone ? 'btn-secondary' : 'btn-primary'}`}
                         disabled={user?.role === 'STUDENT' ? !isStudentServiceOk : !isTeacherGradingOk}
                     >
-                        {user?.role === 'TEACHER' ? 'Chấm điểm' : (isDone ? 'Xem lại' : '⚔️ Chiến ngay')}
+                        {user?.role === 'TEACHER' ? 'Chấm điểm' : (isDone ? 'Xem lại' : (isBoss ? '🔥 RAID NGAY' : '⚔️ Chiến ngay'))}
                     </button>
                 </div>
             </div>
@@ -216,12 +252,15 @@ const AssignmentHubPage: React.FC = () => {
 
             {/* DASHBOARD WIDGETS (STUDENT) */}
             {user?.role === 'STUDENT' && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in-up">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-fade-in-up">
                     <div className="lg:col-span-2">
                         <AiCommander 
                             recommendedTask={studentTodo[0]} // Top ranked todo
                             onClick={() => studentTodo[0] && navigate('assignment_viewer', { assignmentId: studentTodo[0].id })} 
                         />
+                    </div>
+                    <div className="lg:col-span-1">
+                        <DailyQuestWidget />
                     </div>
                     <div className="lg:col-span-1">
                         <WeeklyChest activeDays={4} /> {/* Mock data for active days */}

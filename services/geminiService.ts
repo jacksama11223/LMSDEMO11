@@ -42,7 +42,8 @@ export const callGeminiApi = async (
         throw new Error("API Key is required but not provided.");
     }
     const ai = getGeminiClient(apiKey);
-    const modelName = 'gemini-3-pro-preview'; // Updated to 3 Pro Preview
+    // USER REQUEST: Keep using gemini-2.5-flash for free tier compatibility
+    const modelName = 'gemini-2.5-flash'; 
 
     try {
         const config: any = {
@@ -51,7 +52,8 @@ export const callGeminiApi = async (
 
         // Enable Thinking Mode if requested
         if (options?.useThinking) {
-             config.thinkingConfig = { thinkingBudget: 32768 };
+             // For Gemini 2.5 Flash, enable thinking with a budget suitable for free tier latency
+             config.thinkingConfig = { thinkingBudget: 10240 }; 
              // Do NOT set maxOutputTokens when using thinkingConfig
         }
 
@@ -212,6 +214,7 @@ export const generateLearningPathWithGemini = async (
         Adjust the difficulty and starting point accordingly. If Advanced, skip basics.`;
     }
 
+    // Use Thinking Mode for Learning Path generation if possible to get better structure
     const fullPrompt = `${instruction} Request: "${prompt}". Generate 5 to 7 nodes. Respond in JSON.`;
 
     try {
@@ -219,6 +222,7 @@ export const generateLearningPathWithGemini = async (
             model: 'gemini-2.5-flash',
             contents: fullPrompt,
             config: {
+                // thinkingConfig: { thinkingBudget: 4096 }, // Optional: Enable thinking for structure planning if needed
                 responseMimeType: "application/json",
                 responseSchema: {
                     type: Type.OBJECT,

@@ -237,7 +237,7 @@ const GeminiStudentPage: React.FC = () => {
                             <div className={`w-3 h-3 bg-white rounded-full absolute top-1 transition-all duration-300 ${useThinking ? 'left-6' : 'left-1'}`}></div>
                         </button>
                     </div>
-                    {useThinking && <p className="text-[10px] text-blue-300/60 text-center">Sử dụng Gemini 3 Pro Preview với Thinking Budget tối đa.</p>}
+                    {useThinking && <p className="text-[10px] text-blue-300/60 text-center">Sử dụng Gemini 2.5 Flash Thinking (siêu tốc & tiết kiệm).</p>}
                 </div>
 
                 <div className="w-full px-6 mt-auto mb-4">
