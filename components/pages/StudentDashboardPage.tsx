@@ -3,7 +3,7 @@ import React, { useContext, useMemo, useState, useEffect, useRef } from 'react';
 import { AuthContext, DataContext, GlobalStateContext, PageContext, MusicContext } from '../../contexts/AppProviders';
 import { useFeatureFlag } from '../../hooks/useAppHooks';
 import Modal from '../common/Modal';
-import type { User } from '../../types';
+import type { User, Task } from '../../types';
 
 // Global definition for YouTube IFrame API (in case it's not loaded by LessonPage)
 declare global {
@@ -205,27 +205,139 @@ const RealTimeWeatherWidget = () => {
 
 export const FocusTimerWidget = () => {
     const { pomodoro } = useContext(GlobalStateContext)!;
-    // Use Global State so it persists in PiP
-    
+    const { db, addTask, toggleTask, archiveCompletedTasks } = useContext(DataContext)!;
+    const { user } = useContext(AuthContext)!;
+    const { navigate } = useContext(PageContext)!;
+
+    const [activeTab, setActiveTab] = useState<'focus' | 'short' | 'long'>('focus');
+    const [taskInput, setTaskInput] = useState('');
+
+    const tasks = useMemo(() => {
+        if(!user) return [];
+        return Object.values(db.TASKS).filter(t => t.userId === user.id && !t.isArchived);
+    }, [db.TASKS, user]);
+
     useEffect(() => {
         if (pomodoro.seconds === 0 && pomodoro.isActive) {
              alert("⏰ Hết giờ tập trung!");
              pomodoro.setIsActive(false);
-             pomodoro.setSeconds(25*60);
+             // Reset based on mode
+             if (activeTab === 'focus') pomodoro.setSeconds(25*60);
+             else if (activeTab === 'short') pomodoro.setSeconds(5*60);
+             else pomodoro.setSeconds(15*60);
         }
-    }, [pomodoro.seconds, pomodoro.isActive]);
+    }, [pomodoro.seconds, pomodoro.isActive, activeTab]);
 
-    const fmt = (s: number) => `${Math.floor(s / 60).toString().padStart(2,'0')}:${(s % 60).toString().padStart(2,'0')}`;
+    const handleTabChange = (mode: 'focus' | 'short' | 'long') => {
+        setActiveTab(mode);
+        pomodoro.setIsActive(false);
+        if (mode === 'focus') pomodoro.setSeconds(25 * 60);
+        else if (mode === 'short') pomodoro.setSeconds(5 * 60);
+        else pomodoro.setSeconds(15 * 60);
+    };
+
+    const handleTimeAdjust = (amount: number) => {
+        pomodoro.setSeconds(prev => Math.max(0, prev + amount));
+    };
+
+    const handleAddTask = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (user && taskInput.trim()) {
+            addTask(user.id, taskInput.trim());
+            setTaskInput('');
+        }
+    };
+
+    const formatTime = (s: number) => {
+        const m = Math.floor(s / 60);
+        const sec = s % 60;
+        return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+    };
 
     return (
-        <div className="card p-4 bg-red-900/10 border-red-500/30 flex flex-col items-center h-full justify-center">
-            <h3 className="text-xs font-bold text-red-300 uppercase mb-2">Pomodoro Focus</h3>
-            <div className="text-3xl font-mono font-bold text-white mb-3 tracking-widest">{fmt(pomodoro.seconds)}</div>
-            <div className="flex gap-2">
-                <button onClick={() => pomodoro.setIsActive(!pomodoro.isActive)} className={`px-3 py-1 rounded text-xs font-bold ${pomodoro.isActive ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-300'}`}>
-                    {pomodoro.isActive ? 'Pause' : 'Start'}
+        <div className="card bg-red-900/10 border-red-500/30 flex flex-col h-[340px] overflow-hidden relative">
+            {/* TABS */}
+            <div className="flex bg-black/20 p-1">
+                <button onClick={() => handleTabChange('focus')} className={`flex-1 py-1 text-[10px] font-bold uppercase rounded ${activeTab === 'focus' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>Focus</button>
+                <button onClick={() => handleTabChange('short')} className={`flex-1 py-1 text-[10px] font-bold uppercase rounded ${activeTab === 'short' ? 'bg-green-600 text-white' : 'text-gray-400 hover:text-white'}`}>Short</button>
+                <button onClick={() => handleTabChange('long')} className={`flex-1 py-1 text-[10px] font-bold uppercase rounded ${activeTab === 'long' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}>Long</button>
+            </div>
+
+            {/* TIMER AREA */}
+            <div className="flex flex-col items-center justify-center py-4 relative group">
+                <div className="text-4xl font-mono font-bold text-white tracking-widest leading-none drop-shadow-md">
+                    {formatTime(pomodoro.seconds)}
+                </div>
+                
+                {/* Time Adjust Controls (Hover) */}
+                <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex justify-between px-4 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto">
+                    <button onClick={() => handleTimeAdjust(-60)} className="w-6 h-6 rounded-full bg-white/10 text-white text-xs hover:bg-white/20">-</button>
+                    <button onClick={() => handleTimeAdjust(60)} className="w-6 h-6 rounded-full bg-white/10 text-white text-xs hover:bg-white/20">+</button>
+                </div>
+
+                <div className="flex gap-3 mt-3">
+                    <button 
+                        onClick={() => pomodoro.setIsActive(!pomodoro.isActive)} 
+                        className={`px-4 py-1.5 rounded-lg text-xs font-bold shadow-lg transition-transform active:scale-95 ${pomodoro.isActive ? 'bg-red-500 hover:bg-red-400 text-white' : 'bg-gray-700 hover:bg-gray-600 text-white'}`}
+                    >
+                        {pomodoro.isActive ? 'PAUSE' : 'START'}
+                    </button>
+                    <button 
+                        onClick={() => { pomodoro.setIsActive(false); handleTabChange(activeTab); }} 
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white/10 text-gray-300 hover:bg-white/20"
+                    >
+                        RESET
+                    </button>
+                </div>
+            </div>
+
+            {/* TASK AREA */}
+            <div className="flex-1 bg-black/20 border-t border-white/5 flex flex-col p-2 min-h-0">
+                <div className="flex justify-between items-center mb-1">
+                    <h4 className="text-[10px] font-bold text-gray-400 uppercase">Tasks</h4>
+                    <button 
+                        onClick={() => { if(user && window.confirm("Lưu trữ các task đã hoàn thành?")) archiveCompletedTasks(user.id); }}
+                        className="text-[10px] text-blue-400 hover:underline"
+                        title="Lưu trữ task đã xong"
+                    >
+                        📂 Lưu trữ
+                    </button>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto custom-scrollbar space-y-1 mb-2 pr-1">
+                    {tasks.map(task => (
+                        <div key={task.id} className={`flex items-center gap-2 p-1.5 rounded transition-colors ${task.isCompleted ? 'bg-black/30' : 'bg-white/5 hover:bg-white/10'}`}>
+                            <input 
+                                type="checkbox" 
+                                checked={task.isCompleted} 
+                                onChange={() => toggleTask(task.id)}
+                                className="w-3 h-3 rounded border-gray-600 bg-transparent text-red-500 focus:ring-0 cursor-pointer"
+                            />
+                            <span className={`text-xs truncate flex-1 ${task.isCompleted ? 'line-through text-gray-600' : 'text-gray-200'}`}>
+                                {task.text}
+                            </span>
+                        </div>
+                    ))}
+                    {tasks.length === 0 && <p className="text-[10px] text-gray-600 text-center italic mt-2">Chưa có task nào.</p>}
+                </div>
+
+                <form onSubmit={handleAddTask} className="flex gap-1 mt-auto">
+                    <input 
+                        type="text" 
+                        className="flex-1 bg-black/40 border border-gray-700 rounded px-2 py-1 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-red-500"
+                        placeholder="Thêm task..."
+                        value={taskInput}
+                        onChange={e => setTaskInput(e.target.value)}
+                    />
+                    <button type="submit" className="bg-red-600 text-white w-6 rounded flex items-center justify-center hover:bg-red-500">+</button>
+                </form>
+                
+                <button 
+                    onClick={() => navigate('task_archive')} 
+                    className="text-[9px] text-center text-gray-500 mt-1 hover:text-gray-300"
+                >
+                    Xem lịch sử lưu trữ &rarr;
                 </button>
-                <button onClick={() => { pomodoro.setIsActive(false); pomodoro.setSeconds(25*60); }} className="px-3 py-1 rounded text-xs font-bold bg-gray-700 text-gray-300">Reset</button>
             </div>
         </div>
     );

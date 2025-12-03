@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useContext, useMemo, useRef } from 'react';
 import { AuthContext, DataContext, GlobalStateContext, PageContext, DataProvider, AuthProvider, GlobalStateProvider, PageProvider, MusicProvider } from './contexts/AppProviders';
 import GlobalStyles from './components/common/GlobalStyles';
@@ -28,6 +29,7 @@ import LearningPathCreatorPage from './components/pages/LearningPathCreatorPage'
 import LearningPathDetailPage from './components/pages/LearningPathDetailPage';
 import LearningNodeStudyPage from './components/pages/LearningNodeStudyPage';
 import NotebookPage from './components/pages/NotebookPage';
+import TaskArchivePage from './components/pages/TaskArchivePage'; // NEW
 
 // --- DRAGGABLE FLOATING WIDGET ---
 const FloatingWidget: React.FC<{ children: React.ReactNode; initialPos: { x: number; y: number } }> = ({ children, initialPos }) => {
@@ -234,6 +236,7 @@ const PageRouter: React.FC = () => {
         case 'learning_path_creator': return LearningPathCreatorPage;
         case 'learning_path_detail': return () => <LearningPathDetailPage pathId={params.pathId} />;
         case 'learning_node_study': return () => <LearningNodeStudyPage pathId={params.pathId} nodeId={params.nodeId} isLastNode={params.isLastNode} />;
+        case 'task_archive': return TaskArchivePage; // NEW ROUTE
         default: return StudentDashboardPage;
       }
     }, [page, user, params]);
@@ -342,7 +345,7 @@ const AppLayout: React.FC = () => {
        </main>
        
        {/* Picture-in-Picture Floating Widget (Combined) */}
-       {user?.role === 'STUDENT' && page !== 'dashboard' && (
+       {user?.role === 'STUDENT' && page !== 'dashboard' && page !== 'task_archive' && (
           <FloatingWidget initialPos={{ x: window.innerWidth - 360, y: window.innerHeight - 500 }}>
              <div className="flex flex-col gap-2">
                  <div className="bg-red-900/20 rounded-xl overflow-hidden border border-red-500/20">

@@ -6,7 +6,7 @@ import type {
     User, UserRole, Database, QuizQuestion, MockTestResults, LearningNode, PersonalNote,
     AuthContextType, DataContextType, GlobalStateContextType, PageContextType,
     FeatureFlagStatus, ServiceName, ServiceStatusValue, ServiceStatus, FeatureFlags, StudyGroup,
-    MusicContextType, Track
+    MusicContextType, Track, Task
 } from '../types';
 
 // --- Context Definitions ---
@@ -268,10 +268,10 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
             const savedData = localStorage.getItem('LMS_DB_V1');
             if (savedData) {
                 const parsed = JSON.parse(savedData);
-                // Ensure NODE_NOTES exists for backward compatibility
+                // Ensure new fields exist for backward compatibility
                 if (!parsed.NODE_NOTES) parsed.NODE_NOTES = {};
-                // Ensure PERSONAL_NOTES exists
                 if (!parsed.PERSONAL_NOTES) parsed.PERSONAL_NOTES = {};
+                if (!parsed.TASKS) parsed.TASKS = {};
                 return parsed;
             }
         } catch (e) {
@@ -282,7 +282,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
             GAMIFICATION: { ...MOCK_DATA.GAMIFICATION, streakDays: 3 },
             SCRATCHPAD: {},
             NODE_NOTES: {}, 
-            PERSONAL_NOTES: {} // Initialize
+            PERSONAL_NOTES: {},
+            TASKS: {}
         };
     });
 
@@ -877,6 +878,59 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
             return newDb;
         });
     }, []);
+
+    // --- TASK MANAGEMENT (POMODORO) ---
+    const addTask = useCallback((userId: string, text: string) => {
+        setDb(prevDb => {
+            const newDb = JSON.parse(JSON.stringify(prevDb)) as Database;
+            if (!newDb.TASKS) newDb.TASKS = {};
+            const taskId = `task_${Date.now()}`;
+            newDb.TASKS[taskId] = {
+                id: taskId,
+                userId,
+                text,
+                isCompleted: false,
+                isArchived: false,
+                createdAt: new Date().toISOString()
+            };
+            return newDb;
+        });
+    }, []);
+
+    const toggleTask = useCallback((taskId: string) => {
+        setDb(prevDb => {
+            const newDb = JSON.parse(JSON.stringify(prevDb)) as Database;
+            if (newDb.TASKS[taskId]) {
+                newDb.TASKS[taskId].isCompleted = !newDb.TASKS[taskId].isCompleted;
+                if (newDb.TASKS[taskId].isCompleted) {
+                    newDb.TASKS[taskId].completedAt = new Date().toISOString();
+                } else {
+                    newDb.TASKS[taskId].completedAt = undefined;
+                }
+            }
+            return newDb;
+        });
+    }, []);
+
+    const archiveCompletedTasks = useCallback((userId: string) => {
+        setDb(prevDb => {
+            const newDb = JSON.parse(JSON.stringify(prevDb)) as Database;
+            Object.values(newDb.TASKS).forEach(task => {
+                if (task.userId === userId && task.isCompleted && !task.isArchived) {
+                    task.isArchived = true;
+                }
+            });
+            return newDb;
+        });
+    }, []);
+
+    const deleteTask = useCallback((taskId: string) => {
+        setDb(prevDb => {
+            const newDb = JSON.parse(JSON.stringify(prevDb)) as Database;
+            delete newDb.TASKS[taskId];
+            return newDb;
+        });
+    }, []);
     // ---------------------------------------
 
     const value = useMemo(() => ({
@@ -887,7 +941,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         addVideoNote, deleteVideoNote, markLessonComplete, createLearningPath,
         updateNodeProgress, unlockNextNode, extendLearningPath, saveNodeNote,
         createPersonalNote, updatePersonalNote, deletePersonalNote, savePdfToNote, getPdfForNote, removePdfFromNote,
-        buyShopItem, equipShopItem, checkDailyDiamondReward, updateScratchpad, toggleCourseBookmark, completeOnboarding
+        buyShopItem, equipShopItem, checkDailyDiamondReward, updateScratchpad, toggleCourseBookmark, completeOnboarding,
+        addTask, toggleTask, archiveCompletedTasks, deleteTask
     }), [
         db, registerUser, toggleUserLock, unlockAllUsers, setApiKey, updateUserProfile, editLessonContent,
         createFileAssignment, createQuizAssignment, submitFileAssignment, submitQuiz,
@@ -896,7 +951,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         addVideoNote, deleteVideoNote, markLessonComplete, createLearningPath,
         updateNodeProgress, unlockNextNode, extendLearningPath, saveNodeNote,
         createPersonalNote, updatePersonalNote, deletePersonalNote, savePdfToNote, getPdfForNote, removePdfFromNote,
-        buyShopItem, equipShopItem, checkDailyDiamondReward, updateScratchpad, toggleCourseBookmark, completeOnboarding
+        buyShopItem, equipShopItem, checkDailyDiamondReward, updateScratchpad, toggleCourseBookmark, completeOnboarding,
+        addTask, toggleTask, archiveCompletedTasks, deleteTask
     ]);
 
     return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
@@ -1001,7 +1057,7 @@ export const GlobalStateProvider: React.FC<GlobalStateProviderProps> = ({ childr
         } else if (pomodoroSeconds === 0) {
             setIsPomodoroActive(false);
             // Ideally trigger a notification/sound here, but simplistic for now
-            setPomodoroSeconds(25 * 60);
+            // Don't reset automatically, let user decide next step or reset
         }
         return () => { if (interval) clearInterval(interval); };
     }, [isPomodoroActive, pomodoroSeconds]);

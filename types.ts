@@ -181,6 +181,17 @@ export interface PersonalNote {
     updatedAt: string;
     isPinned?: boolean;
 }
+
+// NEW: Pomodoro Task
+export interface Task {
+    id: string;
+    userId: string;
+    text: string;
+    isCompleted: boolean;
+    isArchived: boolean;
+    createdAt: string;
+    completedAt?: string;
+}
 // -----------------------------------------
 
 // Communication & Collaboration
@@ -374,6 +385,7 @@ export interface Database {
   SCRATCHPAD: Record<string, string>; // NEW: Simple notes per user
   NODE_NOTES: Record<string, NodeNote>; // Notes for specific learning nodes. Key: pathId_nodeId_userId
   PERSONAL_NOTES: Record<string, PersonalNote>; // NEW: Centralized Notebook
+  TASKS: Record<string, Task>; // NEW: Pomodoro Tasks
 }
 
 // Context Types
@@ -434,6 +446,12 @@ export interface DataContextType {
   
   // Onboarding
   completeOnboarding: (userId: string) => void;
+
+  // Task Management (Pomodoro)
+  addTask: (userId: string, text: string) => void;
+  toggleTask: (taskId: string) => void;
+  archiveCompletedTasks: (userId: string) => void;
+  deleteTask: (taskId: string) => void;
 }
 
 export interface GlobalStateContextType {

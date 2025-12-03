@@ -266,5 +266,24 @@ export const MOCK_DATA: Database = {
           createdAt: new Date(Date.now() - 86400000).toISOString(),
           updatedAt: new Date(Date.now() - 86400000).toISOString()
       }
+  },
+  TASKS: {
+      "task_1": {
+          id: "task_1",
+          userId: "sv001",
+          text: "Hoàn thành bài tập CS101",
+          isCompleted: false,
+          isArchived: false,
+          createdAt: new Date().toISOString()
+      },
+      "task_2": {
+          id: "task_2",
+          userId: "sv001",
+          text: "Ôn tập Flashcards Hiragana",
+          isCompleted: true,
+          isArchived: false,
+          createdAt: new Date(Date.now() - 3600000).toISOString(),
+          completedAt: new Date().toISOString()
+      }
   }
 };
